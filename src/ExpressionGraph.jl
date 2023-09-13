@@ -181,6 +181,23 @@ function simplify_check_cache(::typeof(^), a, b, cache)
     end
 end
 
+function same_base_exponent(na, nb)
+    a = Node(na)
+    b = Node(nb)
+
+    if a === b
+        return a^2
+    elseif typeof(value(a)) == typeof(^) && children(a)[1] == b
+        return children(a)[1]^(children(a)[2] + 1)
+    elseif typeof(value(b)) == typeof(^) && children(b)[1] == a
+        return children(b)[1]^(children(b)[2] + 1)
+    elseif typeof(value(b)) == typeof(^) && typeof(value(a)) == typeof(^) && children(a)[1] == children(b)[1]
+        return children(a)[1]^(children(a)[2] + children(b)[2])
+    else
+        return nothing
+    end
+end
+
 function simplify_check_cache(::typeof(*), na, nb, cache)
     a = Node(na)
     b = Node(nb)
@@ -209,6 +226,12 @@ function simplify_check_cache(::typeof(*), na, nb, cache)
         return Node(value(children(b)[1]) * value(a)) * children(b)[2]
     elseif typeof(*) == typeof(value(a)) && typeof(*) == typeof(value(b)) && is_constant(children(b)[1]) && is_constant(children(a)[1])
         return Node(value(children(a)[1]) * value(children(b)[1])) * (children(b)[2] * children(a)[2])
+    elseif (typeof(-) == typeof(value(a)) && arity(a) == 1)  #propagate negates through multiplications
+        return -(children(a)[1] * b)
+    elseif (typeof(-) == typeof(value(b)) && arity(b) == 1)
+        return -(a * children(b)[1])
+    elseif (temp = same_base_exponent(a, b)) !== nothing
+        return temp
     else
         return check_cache((*, a, b), cache)
     end
@@ -262,6 +285,8 @@ function simplify_check_cache(::typeof(+), na, nb, cache)
         return 2 * a
     elseif (tmp = matching_terms(a, b)) !== nothing
         return (tmp[1] + tmp[2]) * tmp[3]
+    elseif typeof(-) == typeof(value(b)) && arity(b) == 1 # x + -y => x-y
+        return a - children(b)[1]
     else
         return check_cache((+, a, b), cache)
     end
