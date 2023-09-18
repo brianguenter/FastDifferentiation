@@ -103,19 +103,16 @@ Base.isless(::FactorOrder, a, b) = factor_order(a, b)
 
 """returns true if a should be sorted before b"""
 function factor_order(a::FactorableSubgraph, b::FactorableSubgraph)
-    if times_used(a) > times_used(b) #num_uses of contained subgraphs always ≥ num_uses of containing subgraphs. Contained subgraphs should always be factored first. It might be that a ⊄ b, but it's still correct to factor a before b.
-        return true
-    elseif times_used(b) > times_used(a)
-        return false
-    else # if a ⊂ b then diff(a) < diff(b) where diff(x) = abs(dominating_node(a) - dominated_node(a)). Might be that a ⊄ b but it's safe to factor a first and if a ⊂ b then it will always be factored first.
-        diffa = node_difference(a)
-        diffb = node_difference(b)
+    # if a ⊂ b then diff(a) < diff(b) where diff(x) = abs(dominating_node(a) - dominated_node(a)). Might be that a ⊄ b but it's safe to factor a first and if a ⊂ b then it will always be factored first.
+    diffa = node_difference(a)
+    diffb = node_difference(b)
 
-        if diffa < diffb
-            return true
-        else
-            return false #can factor a,b in either order 
-        end
+    if diffa < diffb
+        return true
+    elseif times_used(a) > times_used(b) #Factor subgraphs with more uses first for efficiency.
+        return true
+    else
+        return false
     end
 end
 
