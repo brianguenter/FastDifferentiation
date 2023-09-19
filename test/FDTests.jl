@@ -173,7 +173,7 @@ end
 
 
 
-@testitem "FD.is_tree" begin
+@testitem "is_tree" begin
     import FastDifferentiation as FD
 
     FD.@variables x
@@ -208,7 +208,7 @@ end
     @test derivative(a, Val(2)) == x
 end
 
-@testitem "FD.compute_factorable_subgraphs test order" begin
+@testitem "compute_factorable_subgraphs test order" begin
     import FastDifferentiation as FD
     using DataStructures
 
@@ -244,7 +244,7 @@ end
     @test (FD.value_equal(_5_1, subs[5]) && FD.value_equal(_1_5, subs[6])) || (FD.value_equal(_1_5, subs[5]) && FD.value_equal(5_1, subs[6]))
 end
 
-@testitem "FD.compute_factorable_subgraphs" begin
+@testitem "compute_factorable_subgraphs" begin
     include("ShareTestCode.jl")
     using DataStructures
 
@@ -1133,7 +1133,7 @@ end
 end
 
 
-@testitem "FD.subset" begin
+@testitem "subset" begin
     import FastDifferentiation as FD
 
     a = falses(3)
@@ -1161,7 +1161,7 @@ end
     @test FD.value(jac[2, 1]) == 0
 end
 
-@testitem "FD.times_used FD.PathEdge" begin
+@testitem "times_used FD.PathEdge" begin
     import FastDifferentiation as FD
 
     e = FD.PathEdge(1, 2, FD.Node(1), BitVector([1, 0, 1]), BitVector([0, 0, 1]))
@@ -1172,7 +1172,7 @@ end
     @test FD.times_used(e) == 4
 end
 
-@testitem "FD.path_sort_order" begin
+@testitem "path_sort_order" begin
     import FastDifferentiation as FD
 
     e1 = FD.PathEdge(1, 2, FD.Node(1), BitVector([1, 0, 1]), BitVector([0, 0, 1]))
@@ -1183,7 +1183,7 @@ end
     @test FD.path_sort_order(e1, e3) == false
 end
 
-@testitem "FD.multiply_sequence" begin
+@testitem "multiply_sequence" begin
     import FastDifferentiation as FD
 
 
@@ -1399,7 +1399,7 @@ end
     @test DA == derivative(A, nq1)
 end
 
-@testitem "FD.jacobian_times_v" begin
+@testitem "jacobian_times_v" begin
     import FastDifferentiation as FD
     include("ShareTestCode.jl")
 
