@@ -373,6 +373,7 @@ function is_branching(subgraph)
                 if in(pedge, sub_edges) #edge has been visited twice.
                     bad_subgraph = true
                     break
+
                 end
                 push!(sub_edges, pedge)
             end
@@ -382,12 +383,52 @@ function is_branching(subgraph)
     return bad_subgraph
 end
 
+
+"""Resets edges masks for branching subgraphs. If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark with non-dominant bit can be reset. This algorithm could be used for non-branching subgraphs as well but is less efficient since invariants of non-branching subgraphs allow for optimizations"""
+function reset_masks_branching!(subgraph{T}) where {T<:Integer}
+    all_edges = subgraph_edges(subgraph)
+
+    edge_list = collect(all_edges)
+    sort!(edge_list, by=(x, y) -> backward_vertex(subgraph, x) < backward_vertex(subgraph, y))
+
+    vertex_masks = Dict{T,BitVector}()
+
+    for edge in edge_list
+        cedge in backward_edges(subgraph, edge)
+        vert = backward_vertex(subgraph, cedge)
+        if vert != dominated_node(subgraph) #don't want to examine child edges of dominated node
+            if cedge ∉ all_edges
+                if nothing === get(vertex_masks, vert, nothing)
+                    vert_mask[vert] = .!copy(non_dominance_mask(subgraph))
+                end
+                vert_mask .|= non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
+            end
+        end
+    end
+
+    edges_to_delete = PathEdge[]
+
+    #use vertex masks to determine which edges can be reset
+    for edge in edge_list
+        tmp = non_dominance_mask(subgraph, edge)
+        tmp .&= vertex_masks[backward_vertex(subgraph, edge)]
+        if can_delete(edge)
+            push!(edges_to_delete, edge)
+        end
+    end
+
+    return edges_to_delete
+end
+
+
+
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
     local new_edge::PathEdge{T}
     if subgraph_exists(subgraph)
+        branching = is_branching(subgraph)
 
-        if is_branching(subgraph) #handle the uncommon case of factorization creating new factorable subgraphs internal to subgraph
+        if branching #handle the uncommon case of factorization creating new factorable subgraphs internal to subgraph
             sum = evaluate_branching_subgraph(subgraph)
             new_edge = make_factored_edge(subgraph, sum)
         else
@@ -403,7 +444,11 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         end
         add_non_dom_edges!(subgraph)
         #reset roots in R, if possible. All edges earlier in the path than the first vertex with more than one child cannot be reset.
-        edges_to_delete = reset_edge_masks!(subgraph)
+        if branching
+            edges_to_delete = branching_resettable_edges(subgraph)
+        else
+            edges_to_delete = reset_edge_masks!(subgraph)
+        end
         for edge in edges_to_delete
             delete_edge!(graph(subgraph), edge)
         end

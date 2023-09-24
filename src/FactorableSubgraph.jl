@@ -249,7 +249,7 @@ end
 """
     reset_edge_masks!(subgraph::FactorableSubgraph{T})
 
-Sets the reachable root and variable masks for every edge in `DominatorSubgraph` `subgraph`. """
+Sets the reachable root and variable masks for every edge in `subgraph`. """
 function reset_edge_masks!(subgraph::FactorableSubgraph{T}) where {T}
     edges_to_delete = PathEdge{T}[]
 
