@@ -245,7 +245,7 @@ end
 end
 
 @testitem "compute_factorable_subgraphs" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     using DataStructures
 
     import FastDifferentiation as FD
@@ -601,7 +601,7 @@ end
 end
 
 @testitem "dominators FD.DerivativeGraph" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     import FastDifferentiation as FD
 
 
@@ -667,7 +667,7 @@ end
 
 
 @testitem "dom_subgraph && pdom_subgraph" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     import FastDifferentiation as FD
 
     using FastDifferentiation: dom_subgraph, pdom_subgraph
@@ -744,7 +744,7 @@ end
 end
 
 @testitem "factor_order" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     using DataStructures
     import FastDifferentiation as FD
 
@@ -795,7 +795,7 @@ end
 end
 
 @testitem "subgraph_edges" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     using DataStructures
     import FastDifferentiation as FD
 
@@ -828,7 +828,7 @@ end
 
 @testitem "subgraph_edges with branching" begin
     import FastDifferentiation as FD
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
 
 
     FD.@variables x
@@ -856,7 +856,7 @@ end
 end
 
 @testitem "deconstruct_subgraph" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     import FastDifferentiation as FD
 
     graph, subs = FDTests.simple_factorable_subgraphs()
@@ -1102,7 +1102,7 @@ end
 
 
 @testitem "evaluate_subgraph" begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     import FastDifferentiation as FD
 
 
@@ -1208,7 +1208,7 @@ end
 
 
 @testitem "factor ℝ¹->ℝ¹ " begin
-    include("ShareTestCode.jl")
+    include("SimpleTestFunctions.jl")
     import FiniteDifferences
     import FastDifferentiation as FD
 
@@ -1276,13 +1276,12 @@ end
 end
 
 @testitem "sparse_jacobian" begin
-    include("ShareTestCode.jl")
-    import FastDifferentiation as FD
+    include("ComplexTestFunctions.jl")
 
     FD.@variables x y z
 
     sph_order = 10
-    FD_graph = FDTests.spherical_harmonics(sph_order, x, y, z)
+    FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
 
@@ -1296,14 +1295,14 @@ end
 end
 
 @testitem "sparse jacobian exe" begin
-    include("ShareTestCode.jl")
-    import FastDifferentiation as FD
+    include("ComplexTestFunctions.jl")
+
 
 
     FD.@variables x y z
     input_vars = [x, y, z]
     sph_order = 10
-    FD_graph = FDTests.spherical_harmonics(sph_order, x, y, z)
+    FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), input_vars)
     dense = jacobian(FD.roots(FD_graph), input_vars)
     sprse_exe = FD.make_function(sprse, input_vars)
@@ -1318,11 +1317,10 @@ end
 end
 
 @testitem "spherical harmonics jacobian evaluation test" begin
-    include("ShareTestCode.jl")
+    include("ComplexTestFunctions.jl")
     import FiniteDifferences
-    import FastDifferentiation as FD
 
-    FD_graph = FDTests.spherical_harmonics(10)
+    FD_graph = spherical_harmonics(10)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 
@@ -1344,11 +1342,11 @@ end
 
 @testitem "Chebyshev jacobian evaluation test" begin
     import FiniteDifferences
-    include("ShareTestCode.jl")
-    import FastDifferentiation as FD
+    include("ComplexTestFunctions.jl")
+
 
     chebyshev_order = 20
-    FD_graph = FDTests.chebyshev(FDTests.FastSymbolic(), chebyshev_order)
+    FD_graph = chebyshev(FastSymbolic(), chebyshev_order)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(variables...) = vec(mn_func(variables...))
 
@@ -1400,12 +1398,11 @@ end
 end
 
 @testitem "jacobian_times_v" begin
-    import FastDifferentiation as FD
-    include("ShareTestCode.jl")
+    include("ComplexTestFunctions.jl")
 
     order = 10
 
-    FD_graph = FDTests.spherical_harmonics(order)
+    FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
     func_vars = FD.variables(FD_graph)
 
@@ -1430,12 +1427,11 @@ end
 end
 
 @testitem "jacobian_transpose_v" begin
-    import FastDifferentiation as FD
-    include("ShareTestCode.jl")
+    include("ComplexTestFunctions.jl")
 
     order = 10
 
-    FD_graph = FDTests.spherical_harmonics(order)
+    FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
     func_vars = FD.variables(FD_graph)
 
@@ -1552,9 +1548,8 @@ end
 end
 
 @testitem "SArray return" begin
-    include("ShareTestCode.jl")
+    include("ComplexTestFunctions.jl")
     using StaticArrays
-    import FastDifferentiation as FD
 
     FD.@variables x y
     j = jacobian([x^2 * y^2, cos(x + y), log(x / y)], [x, y])
@@ -1564,7 +1559,7 @@ end
     @test typeof(j_exe2([1.0, 2.0])) <: StaticArray
 
     test_vec = [1.1, 2.3, 3.1]
-    sph_func = FDTests.spherical_harmonics(4)
+    sph_func = spherical_harmonics(4)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func)) #return type of executable should be Array
     m, n = size(sph_jac)
@@ -1606,10 +1601,9 @@ end
 end
 
 @testitem "reverse_AD" begin
-    include("ShareTestCode.jl")
-    import FastDifferentiation as FD
+    include("ComplexTestFunctions.jl")
 
-    sph_func = FDTests.spherical_harmonics(7)
+    sph_func = spherical_harmonics(7)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 
