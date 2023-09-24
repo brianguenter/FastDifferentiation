@@ -149,6 +149,9 @@ non_dominance_dimension(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}) w
 forward_vertex(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = top_vertex(edge)
 forward_vertex(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = bott_vertex(edge)
 
+backward_vertex(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = bott_vertex(edge)
+backward_vertex(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = top_vertex(edge)
+
 function next_valid_edge(a::FactorableSubgraph, current_edge::PathEdge{T}) where {T}
     if forward_vertex(a, current_edge) == dominating_node(a) #reached the end of the subgraph
         return nothing
