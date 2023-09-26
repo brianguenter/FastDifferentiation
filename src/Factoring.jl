@@ -414,8 +414,8 @@ function is_branching(subgraph)
                 end
             end
         end
-        return false
     end
+    return false
 end
 
 """Resets edges masks for branching subgraphs. If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark with non-dominant bit can be reset. This algorithm could be used for non-branching subgraphs as well but is less efficient since invariants of non-branching subgraphs allow for optimizations"""
@@ -439,7 +439,7 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}) where {T<:Integ
                 if cedge ∉ sub_edges
                     tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
                 else
-                    tmp_mask .= tmp_mask .| vertex_masks[backward_vertex(subgraph, edge)]
+                    tmp_mask .= tmp_mask .| vertex_masks[backward_vertex(subgraph, cedge)]
                 end
             end
         end
