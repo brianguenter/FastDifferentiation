@@ -69,7 +69,7 @@ end
     @. vars &= !vars
     @test !FD.isa_connected_path(_2_4, e3_4)
 end
-@testitem "add_non_dom_edges" begin
+@testitem "split_non_dom_edges" begin
     import FastDifferentiation as FD
     using DataStructures
 
@@ -95,7 +95,12 @@ end
     _5_3 = subs[1]
     @test (5, 3) == FD.vertices(_5_3)
 
-    FD.add_non_dom_edges!(_5_3)
+    non_dom_edges = FD.split_non_dom_edges!(_5_3)
+
+    for edge in non_dom_edges
+        FD.add_edge!(graph, edge)
+    end
+
     #single edge 3,4 should be split into two: ([r1,r2],[v1,v2]) -> ([r1],[v1,v2]),([r2],[v1,v2])
     edges3_4 = FD.edges(graph, 4, 3)
     @test length(edges3_4) == 2
@@ -110,7 +115,11 @@ end
     _2_4 = subs[2]
     @test (2, 4) == FD.vertices(_2_4)
 
-    FD.add_non_dom_edges!(_2_4)
+    non_dom_edges = FD.split_non_dom_edges!(_2_4)
+
+    for edge in non_dom_edges
+        FD.add_edge!(graph, edge)
+    end
     #single edge 3,4 should be split in two: ([r1,r2],[v1,v2])->([r1,r2],[v1]),([r1,r2],[v2])
     edges3_4 = FD.edges(graph, 4, 3)
     @test length(edges3_4) == 2
@@ -1076,11 +1085,16 @@ end
     _3_5 = FD.postdominator_subgraph(graph, 3, 5, Bool[0, 1], Bool[0, 1], Bool[1, 1])
     _4_1 = FD.dominator_subgraph(graph, 4, 1, Bool[1, 0], Bool[1, 1], Bool[1, 0])
     _5_1 = FD.dominator_subgraph(graph, 5, 1, Bool[0, 1], Bool[0, 1], Bool[1, 0])
+
+
+
     _1_5 = FD.postdominator_subgraph(graph, 1, 5, Bool[1, 0], Bool[0, 1], Bool[1, 0])
 
     sub_eval = FD.evaluate_subgraph(_5_3)
     FD.factor_subgraph!(_5_3)
 end
+
+
 
 
 @testitem "factor_subgraph 2" begin
@@ -1097,7 +1111,7 @@ end
     graph = FD.DerivativeGraph([n5, n4])
     tmp = FD.postdominator_subgraph(graph, 2, 4, BitVector([0, 1]), BitVector([0, 1]), BitVector([0, 1]))
     FD.factor_subgraph!(tmp)
-    @test length(FD.edges(graph, 2, 4)) == 2
+    @test length(FD.edges(graph, 2, 4)) == 1
 
 end
 
@@ -1365,7 +1379,7 @@ end
     end
 
     tmp = Matrix{Float64}(undef, 1, 1)
-    FD_graph = FDTests.chebyshev(FDTests.FastSymbolic(), chebyshev_order)
+    FD_graph = chebyshev(FastSymbolic(), chebyshev_order)
     sym_func = FD.make_function(FD.jacobian(FD.roots(FD_graph), FD.variables(FD_graph)), FD.variables(FD_graph), in_place=false)
 
     #the in place form of jacobian function
@@ -1605,7 +1619,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(7)
+    sph_func = spherical_harmonics(8)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 

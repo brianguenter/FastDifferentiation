@@ -78,10 +78,13 @@ function make_dot_file(graph, edges_to_draw::AbstractVector{P}, label::String, r
         variables = join(findall(x -> x == 1, reachable_variables(e)), ",")
         edge_label = ""
 
+        chars_to_display = 100
         if value_labels
             srep = "$(value(e)) "
-            if length(srep) < 15
+            if length(srep) < chars_to_display
                 edge_label *= "$(value(e)) "
+            else
+                edge_label *= srep[1:chars_to_display] * "..."
             end
         end
         if reachability_labels

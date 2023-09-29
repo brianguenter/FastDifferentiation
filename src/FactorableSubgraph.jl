@@ -129,13 +129,15 @@ Returns child edges if subgraph is dominator and parent edges otherwise. Child e
 backward_edges(a::FactorableSubgraph{T,DominatorSubgraph}, node_index::T) where {T} = child_edges(graph(a), node_index)
 backward_edges(a::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::T) where {T} = parent_edges(graph(a), node_index)
 
-backward_edges(a::FactorableSubgraph, edge::PathEdge) = backward_edges(a, forward_vertex(a, edge))
+backward_edges(a::FactorableSubgraph, edge::PathEdge) = backward_edges(a, backward_vertex(a, edge))
 
 test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_variables(a), reachable_variables(edge))
 test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
 
 reachable_dominance(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
 reachable_dominance(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = reachable_variables(edge)
+reachable_non_dominance(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_variables(edge)
+reachable_non_dominance(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
 
 non_dominance_mask(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_variables(edge)
 non_dominance_mask(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
@@ -145,6 +147,9 @@ non_dominance_mask(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = r
 
 non_dominance_dimension(subgraph::FactorableSubgraph{T,DominatorSubgraph}) where {T} = domain_dimension(graph(subgraph))
 non_dominance_dimension(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = codomain_dimension(graph(subgraph))
+
+dominance_dimension(subgraph::FactorableSubgraph{T,DominatorSubgraph}) where {T} = codomain_dimension(graph(subgraph))
+dominance_dimension(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = domain_dimension(graph(subgraph))
 
 forward_vertex(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = top_vertex(edge)
 forward_vertex(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = bott_vertex(edge)
@@ -214,10 +219,10 @@ end
 
 
 """
-    add_non_dom_edges!(subgraph::FactorableSubgraph{T,S})
+split_non_dom_edges!(subgraph::FactorableSubgraph{T,S})
 
-Splits edges which have roots not in the `dominance_mask` of `subgraph`. Original edge has only roots in `dominance_mask`. A new edge is added to the graph that contains only roots not in `dominance_mask`."""
-function add_non_dom_edges!(subgraph::FactorableSubgraph{T,S}) where {T,S<:AbstractFactorableSubgraph}
+Splits edges which have roots not in the `dominance_mask` of `subgraph`. Resets the reachability mask of dominated edges and creates, and returns, a list of new edges that have reachability mask corresponding to the non-dominant roots or variables."""
+function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}) where {T,S<:AbstractFactorableSubgraph}
     temp_edges = PathEdge{T}[]
 
     for s_edge in forward_edges(subgraph, dominated_node(subgraph))
@@ -235,59 +240,14 @@ function add_non_dom_edges!(subgraph::FactorableSubgraph{T,S}) where {T,S<:Abstr
                         push!(temp_edges, PathEdge(top_vertex(pedge), bott_vertex(pedge), value(pedge), diff, copy(reachable_roots(pedge)))) #create a new edge that accounts for roots not in the     dominance mask    
                     end
 
-                    @. edge_mask &= !diff #in the original edge reset the roots/variables not in dominance mask
+                    edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
                 end
             end
         end
     end
-    gr = graph(subgraph)
-    for edge in temp_edges
-        add_edge!(gr, edge)
-    end
-
-    return nothing
+    return temp_edges
 end
 
-
-"""
-    reset_edge_masks!(subgraph::FactorableSubgraph{T})
-
-Sets the reachable root and variable masks for every edge in `subgraph`. """
-function reset_edge_masks!(subgraph::FactorableSubgraph{T}) where {T}
-    edges_to_delete = PathEdge{T}[]
-
-    for fwd_edge in forward_edges(subgraph, dominated_node(subgraph))
-        bypass_mask = .!copy(non_dominance_mask(subgraph)) #bypass mask tracks which variables/roots are on a backward path that bypasses the dominated_node. These variables/roots cannot be reset. 0 means can be reset 1 means can't.
-
-        if test_edge(subgraph, fwd_edge)
-            for pedge in edge_path(subgraph, fwd_edge)
-
-                mask = non_dominance_mask(subgraph, pedge)
-                @. mask = mask & bypass_mask #if any bits in bypass mask are 1 then those bits won't be reset. 
-
-                if !any(bypass_mask .& non_dominance_mask(subgraph)) #no edges bypass dominated node so can reset all dominance bits. If any edges bypass cannot reset any dominance bits.
-                    fmask = reachable_dominance(subgraph, fwd_edge)
-                    fmask = fmask .& .!reachable_dominance(subgraph)
-                end
-
-                if forward_vertex(subgraph, pedge) != dominating_node(subgraph)
-                    for bedge in backward_edges(subgraph, pedge)
-                        if test_edge(subgraph, bedge) && bedge !== pedge
-                            #want to test by object identity - don't want to include the non_dom mask of the current edge 
-                            bypass_mask .|= non_dominance_mask(subgraph, bedge)
-                        end
-                    end
-                end
-
-                if can_delete(pedge)
-                    push!(edges_to_delete, pedge)
-                end
-            end
-        end
-    end
-
-    return edges_to_delete
-end
 
 
 function check_edges(subgraph::FactorableSubgraph{T,S}, edge_list::Vector{PathEdge{T}}) where {T,S}
@@ -337,7 +297,7 @@ function subgraph_edges(subgraph::FactorableSubgraph{T}, sub_edges::Union{Nothin
         end
     end
 
-    @assert length(sub_edges) ≥ 2 "If subgraph exists should be at least two valid edges in subgraph. Instead got none."
+    # @assert length(sub_edges) ≥ 2 "If subgraph exists should be at least two valid edges in subgraph. Instead got none."
 
     return sub_edges
 end
@@ -349,13 +309,8 @@ end
 Returns subgraph edges, as a `Set`, and nodes, as a `Vector`."""
 function deconstruct_subgraph(subgraph::FactorableSubgraph)
     sub_edges = subgraph_edges(subgraph)
-    sub_nodes = map(x -> bott_vertex(x), collect(sub_edges))
-    if subgraph isa FactorableSubgraph{T,DominatorSubgraph} where {T}
-        push!(sub_nodes, dominating_node(subgraph))
-    else
-        push!(sub_nodes, dominated_node(subgraph))
-    end
-
+    sub_nodes = map(x -> backward_vertex(subgraph, x), collect(sub_edges))
+    push!(sub_nodes, dominating_node(subgraph)) #dominating node will not be the backward vertex of any edge
     return sub_edges, unique(sub_nodes)
 end
 
