@@ -358,35 +358,46 @@ function make_factored_edge(subgraph::FactorableSubgraph{T,PostDominatorSubgraph
     return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
 end
 
+function check_sub_edges(subgraph, sub_edges)
+    #compute all nodes in subgraph
+    node_set = Set{Int64}()
+    for edge in sub_edges
+        push!(node_set, forward_vertex(subgraph, edge))
+        push!(node_set, backward_vertex(subgraph, edge))
+    end
 
-"""Returns true if a new factorable subgraph was created inside `subgraph` during the factorization process. If true then must compute factorable subgraphs for the edges inside `subgraph`. `subgraph_exists` should be called before executing this function otherwise it may return false when no new subgraphs have been created."""
-# function is_branching(subgraph)
-#     fedges = forward_edges(subgraph, dominated_node(subgraph))
+    # if dominating_node(subgraph) ∉ node_set
+    #     show(subgraph)
+    #     
+    # end
 
-#     sub_edges = Set{PathEdge}()
-#     bad_subgraph = false
-#     for edge in fedges #for each forward edge from the dominated node find all edges on that path. If any edge in the subgraph is visited more than once this means a new factorable subgraph has been created.
-#         good_edges, tmp = edges_on_path(subgraph, edge)
+    if dominating_node(subgraph) ∉ node_set
+        # show(vertices.(sub_edges))
+        # show(dominating_node(subgraph))
+        # println()
+        # show(dominated_node(subgraph))
+        # println()
+        # show(node_set)
+        # println(typeof(subgraph))
+        subgraph_edges(subgraph)
+    end
 
-#         if good_edges
-#             for pedge in tmp
-#                 if in(pedge, sub_edges) #edge has been visited twice.
-#                     bad_subgraph = true
-#                     break
+    @assert dominating_node(subgraph) ∈ node_set
+    @assert dominated_node(subgraph) ∈ node_set
+    #end check
+end
 
-#                 end
-#                 push!(sub_edges, pedge)
-#             end
-#         end
-#     end
-
-#     return bad_subgraph
-# end
+"""Returns true if a new factorable subgraph was created inside `subgraph` during the factorization process. This will cause a branch internal to the subgraph. `subgraph_exists` should be called before executing this function otherwise it may return false when no new subgraphs have been created."""
 
 function is_branching(subgraph)
     sub_edges = subgraph_edges(subgraph)
 
+    check_sub_edges(subgraph, sub_edges)
+
+
+
     for edge in sub_edges
+        #look for a an upward branch
         if forward_vertex(subgraph, edge) != dominating_node(subgraph)
             let count = 0
                 tmp = forward_edges(subgraph, edge)
@@ -400,7 +411,7 @@ function is_branching(subgraph)
                 end
             end
         end
-
+        #look for a downward branch
         if backward_vertex(subgraph, edge) != dominated_node(subgraph)
             let count = 0
                 tmp = backward_edges(subgraph, edge)
@@ -418,10 +429,12 @@ function is_branching(subgraph)
     return false
 end
 
+"""sorts edges by reverse postorder of the `top_vertex(edge)`"""
 function sort_edge_list!(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, edge_list) where {T}
     sort!(edge_list, by=x -> backward_vertex(subgraph, x), rev=true)
 end
 
+"""sorts edges by postorder of the `bott_vertex(edge)`"""
 function sort_edge_list!(subgraph::FactorableSubgraph{T,DominatorSubgraph}, edge_list) where {T}
     sort!(edge_list, by=x -> backward_vertex(subgraph, x))
 end
@@ -453,6 +466,8 @@ end
 If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
 function reset_masks_branching!(subgraph::FactorableSubgraph{T}) where {T<:Integer}
     sub_edges = subgraph_edges(subgraph)
+    check_sub_edges(subgraph, sub_edges)
+
     edge_list = collect(sub_edges)
 
     sort_edge_list!(subgraph, edge_list) #sorts edges by postorder for DominatorSubgraph and reverse postorder for PostDominatorSubgraph.
@@ -562,8 +577,10 @@ order!(::FactorableSubgraph{T,PostDominatorSubgraph}, nodes::Vector{T}) where {T
 predecessors(sub::FactorableSubgraph{T,DominatorSubgraph}, node_index::Integer) where {T<:Integer} = top_vertex.(filter(x -> test_edge(sub, x), parent_edges(graph(sub), node_index))) #allocates but this should rarely be called so shouldn't be efficiency issue.
 predecessors(sub::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::Integer) where {T<:Integer} = bott_vertex.(filter(x -> test_edge(sub, x), child_edges(graph(sub), node_index)))
 
-predecessor_edges(sub::FactorableSubgraph{T,DominatorSubgraph}, node_index::Integer) where {T<:Integer} = filter(x -> test_edge(sub, x), parent_edges(graph(sub), node_index)) #allocates but this should rarely be called so shouldn't be efficiency issue.
-predecessor_edges(sub::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::Integer) where {T<:Integer} = filter(x -> test_edge(sub, x), child_edges(graph(sub), node_index))
+"""Returns edges on the path from `node_index` to the dominating node which have one vertex equal to `node_index`"""
+predecessor_edges(sub::FactorableSubgraph{T,DominatorSubgraph}, node_index::Integer) where {T<:Integer} = filter(x -> test_edge(sub, x), parent_edges(graph(sub), node_index)) #filter allocates: may be efficiency issue.
+"""Returns edges on the path from `node_index` to the dominating node which have one vertex equal to `node_index`"""
+predecessor_edges(sub::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::Integer) where {T<:Integer} = filter(x -> test_edge(sub, x), child_edges(graph(sub), node_index)) #filter allocates: may be efficiency issue.
 
 
 """Computes idoms for special case when new factorable subgraphs are created by factorization. This seems redundant with compute_factorable_subgraphs, fill_idom_tables, etc. but invariants that held when graph was first factored no longer hold so need specialized code. Not currently used, experimental code."""
@@ -591,35 +608,66 @@ function vertex_counts(subgraph::FactorableSubgraph{T}) where {T}
     return counts
 end
 
+# function evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}) where {T}
+#     sub_edges, sub_nodes = deconstruct_subgraph(subgraph)
+#     counts = vertex_counts(subgraph)
+#     for nde in sub_nodes
+#         @assert counts[nde] !== nothing
+#     end
+
+#     counts[dominated_node(subgraph)] = 1
+#     vertex_sums = Dict{T,Node}()
+#     # Vis.draw_dot(subgraph)
+#     edge_list = collect(sub_edges)
+#     sort_edge_list!(subgraph, edge_list)
+#     _evaluate_branching_subgraph(subgraph, Node(1), dominated_node(subgraph), edge_list, counts, vertex_sums)
+
+#     return vertex_sums[dominating_node(subgraph)]
+# end
+
 function evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}) where {T}
     sub_edges, sub_nodes = deconstruct_subgraph(subgraph)
-    counts = vertex_counts(subgraph)
-    counts[dominated_node(subgraph)] = 1
     vertex_sums = Dict{T,Node}()
+    vertex_sums[dominated_node(subgraph)] = 1
     # Vis.draw_dot(subgraph)
-    _evaluate_branching_subgraph(subgraph, Node(1), dominated_node(subgraph), sub_edges, counts, vertex_sums)
+    edge_list = collect(sub_edges)
+    sort_edge_list!(subgraph, edge_list)
+
+    for edge in edge_list
+        if get(vertex_sums, forward_vertex(subgraph, edge), nothing) === nothing
+            vertex_sums[forward_vertex(subgraph, edge)] = vertex_sums[backward_vertex(subgraph, edge)] * value(edge)
+        else
+            vertex_sums[forward_vertex(subgraph, edge)] += vertex_sums[backward_vertex(subgraph, edge)] * value(edge)
+        end
+    end
+
+    @assert get(vertex_sums, dominating_node(subgraph), nothing) !== nothing "evaluate_branching_subgraph: vertex sum for dominating node did not exist"
 
     return vertex_sums[dominating_node(subgraph)]
 end
 
-function _evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}, sum::Node, current_vertex::T, sub_edges, counts::Dict{T,T}, vertex_sums::Dict{T,Node}) where {T}
-    if get(vertex_sums, current_vertex, nothing) === nothing
-        vertex_sums[current_vertex] = sum
-    else
-        vertex_sums[current_vertex] += sum
-    end
 
-    counts[current_vertex] -= 1
-    if counts[current_vertex] == 0
-        for edge in predecessor_edges(subgraph, current_vertex)
-            if !in(edge, sub_edges)
-                continue
-            else
-                _evaluate_branching_subgraph(subgraph, vertex_sums[current_vertex] * value(edge), forward_vertex(subgraph, edge), sub_edges, counts, vertex_sums)
-            end
-        end
-    end
-end
+# function _evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}, sum::Node, current_vertex::T, sub_edges, counts::Dict{T,T}, vertex_sums::Dict{T,Node}) where {T}
+#     if get(vertex_sums, current_vertex, nothing) === nothing
+#         vertex_sums[current_vertex] = sum
+#     else
+#         vertex_sums[current_vertex] += sum
+#     end
+
+#     @assert get(counts, current_vertex, nothing) !== nothing " in _evaluate_branching_subgraph: counts[current_vertex] === nothing. This should never happen $counts $current_vertex"
+
+#     counts[current_vertex] -= 1
+#     if counts[current_vertex] == 0
+#         for edge in predecessor_edges(subgraph, current_vertex)
+#             if !in(edge, sub_edges)
+#                 # @assert false "$(vertices(edge)) $(vertices.(sub_edges))"
+#                 continue
+#             else
+#                 _evaluate_branching_subgraph(subgraph, vertex_sums[current_vertex] * value(edge), forward_vertex(subgraph, edge), sub_edges, counts, vertex_sums)
+#             end
+#         end
+#     end
+# end
 
 ### End of functions for evaluating subgraphs with branches.
 

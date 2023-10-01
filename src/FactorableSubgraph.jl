@@ -131,8 +131,22 @@ backward_edges(a::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::T) wh
 
 backward_edges(a::FactorableSubgraph, edge::PathEdge) = backward_edges(a, backward_vertex(a, edge))
 
-test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_variables(a), reachable_variables(edge))
-test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
+"""returns true if `edge` is on a valid path from the `dominated_node(a)` to the `dominating_node(a)`, i.e., the edge is in the subgraph.
+
+# Note: this is legal: `reachable_variables(a) ⊄ reachable_variables(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
+# test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_variables(a), reachable_variables(edge))
+# """returns true if `edge` is on a valid path from the `dominated_node(a)` to the `dominating_node(a)`, i.e., the edge is in the subgraph.
+
+# Note: this is legal: `reachable_roots(a) ⊄ reachable_roots(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
+# test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
+
+"""Note: this is legal: `reachable_variables(a) ⊄ reachable_variables(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
+test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && subset(reachable_variables(a), reachable_variables(edge))
+"""returns true if `edge` is on a valid path from the `dominated_node(a)` to the `dominating_node(a)`, i.e., the edge is in the subgraph.
+
+Note: this is legal: `reachable_roots(a) ⊄ reachable_roots(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
+test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && subset(reachable_roots(a), reachable_roots(edge))
+
 
 reachable_dominance(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
 reachable_dominance(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = reachable_variables(edge)
@@ -296,6 +310,7 @@ function subgraph_edges(subgraph::FactorableSubgraph{T}, sub_edges::Union{Nothin
             end
         end
     end
+
 
     # @assert length(sub_edges) ≥ 2 "If subgraph exists should be at least two valid edges in subgraph. Instead got none."
 

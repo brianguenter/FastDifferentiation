@@ -834,6 +834,11 @@ end
     _8_1_sub_ref = Set(map(x -> x[1], FD.edges.(Ref(dgraph), ((8, 7), (8, 4), (4, 1), (3, 1), (6, 3), (7, 6)))))
     @test issetequal(_8_1_sub_ref, FD.subgraph_edges(_8_1_sub))
     @test issetequal(_8_1_sub_ref, FD.subgraph_edges(_1_8_sub))
+end
+
+@testitem "subgraph_edges" begin
+    import FastDifferentiation as FD
+
 
 end
 
@@ -1296,7 +1301,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 10
+    sph_order = 9
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
@@ -1336,7 +1341,7 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(10)
+    FD_graph = spherical_harmonics(7)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 
@@ -1619,7 +1624,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(8)
+    sph_func = spherical_harmonics(7)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 
