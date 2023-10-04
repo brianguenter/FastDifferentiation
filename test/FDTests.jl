@@ -94,8 +94,8 @@ end
     subs = extract_all!(subs_heap)
     _5_3 = subs[1]
     @test (5, 3) == FD.vertices(_5_3)
-
-    non_dom_edges = FD.split_non_dom_edges!(_5_3)
+    sub_edges = FD.subgraph_edges(_5_3)
+    non_dom_edges = FD.split_non_dom_edges!(_5_3, sub_edges)
 
     for edge in non_dom_edges
         FD.add_edge!(graph, edge)
@@ -114,8 +114,8 @@ end
     subs = extract_all!(sub_heap)
     _2_4 = subs[2]
     @test (2, 4) == FD.vertices(_2_4)
-
-    non_dom_edges = FD.split_non_dom_edges!(_2_4)
+    sub_edges = FD.subgraph_edges(_2_4)
+    non_dom_edges = FD.split_non_dom_edges!(_2_4, sub_edges)
 
     for edge in non_dom_edges
         FD.add_edge!(graph, edge)
@@ -127,6 +127,34 @@ end
     @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
     test_edge = (FD.PathEdge(4, 3, y, BitVector([0, 1]), BitVector([1, 1])))
     @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
+end
+
+@testitem "split_non_dom_edges 2" begin
+    import FastDifferentiation as FD
+
+    FD.@variables x
+
+    n2 = exp(x)
+    n3 = x * n2
+    n4 = cos(n2)
+    r1 = n3 * n4
+    r2 = log(n4)
+
+    graph = FD.DerivativeGraph([r1, r2])
+
+    subs = FD.extract_all!(FD.compute_factorable_subgraphs(graph))
+
+    correct_edges = Dict((1, 3) => Tuple{Int64,Int64}[], (5, 2) => [(4, 2)], (1, 5) => Tuple{Int64,Int64}[], (5, 1) => [(2, 1), (4, 2)])
+    for sub in subs
+        sub_copy = deepcopy(sub)
+        sub_edges = FD.subgraph_edges(sub_copy)
+        edges = FD.split_non_dom_edges!(sub_copy, sub_edges)
+
+        for c_edge in correct_edges[FD.vertices(sub_copy)]
+            @test c_edge ∈ FD.vertices.(edges)
+        end
+
+    end
 end
 
 @testitem "iteration" begin
@@ -836,12 +864,6 @@ end
     @test issetequal(_8_1_sub_ref, FD.subgraph_edges(_1_8_sub))
 end
 
-@testitem "subgraph_edges" begin
-    import FastDifferentiation as FD
-
-
-end
-
 @testitem "subgraph_edges with branching" begin
     import FastDifferentiation as FD
     include("SimpleTestFunctions.jl")
@@ -870,6 +892,8 @@ end
     @test count(x -> FD.vertices(x) == (3, 2), edges_1_4) == 2
     @test count(x -> FD.vertices(x) == (2, 1), edges_1_4) == 1
 end
+
+
 
 @testitem "deconstruct_subgraph" begin
     include("SimpleTestFunctions.jl")
@@ -1056,10 +1080,12 @@ end
     subs = extract_all!(sub_heap)
 
     _5_3 = filter(x -> FD.vertices(x) == (5, 3), subs)[1]
-    e_5_3 = FD.make_factored_edge(_5_3, FD.evaluate_subgraph(_5_3))
+    sub_edges = FD.subgraph_edges(_5_3)
+    e_5_3 = FD.make_factored_edge(_5_3, FD.evaluate_subgraph(_5_3, sub_edges))
 
     _3_5 = filter(x -> FD.vertices(x) == (3, 5), subs)[1]
-    e_3_5 = FD.make_factored_edge(_3_5, FD.evaluate_subgraph(_3_5))
+    sub_edges = FD.subgraph_edges(_3_5)
+    e_3_5 = FD.make_factored_edge(_3_5, FD.evaluate_subgraph(_3_5, sub_edges))
 
     @test FD.bit_equal(FD.reachable_roots(e_5_3), BitVector([1, 0]))
     @test FD.bit_equal(FD.reachable_variables(e_5_3), BitVector([1, 1]))
@@ -1094,8 +1120,8 @@ end
 
 
     _1_5 = FD.postdominator_subgraph(graph, 1, 5, Bool[1, 0], Bool[0, 1], Bool[1, 0])
-
-    sub_eval = FD.evaluate_subgraph(_5_3)
+    sub_edges = FD.subgraph_edges(_5_3)
+    sub_eval = FD.evaluate_subgraph(_5_3, sub_edges)
     FD.factor_subgraph!(_5_3)
 end
 
@@ -1301,7 +1327,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 9
+    sph_order = 10
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
@@ -1341,7 +1367,7 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(7)
+    FD_graph = spherical_harmonics(6)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 

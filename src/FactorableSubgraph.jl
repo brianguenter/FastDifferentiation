@@ -141,11 +141,11 @@ backward_edges(a::FactorableSubgraph, edge::PathEdge) = backward_edges(a, backwa
 # test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
 
 """Note: this is legal: `reachable_variables(a) ⊄ reachable_variables(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
-test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && subset(reachable_variables(a), reachable_variables(edge))
+test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_variables(a), reachable_variables(edge))
 """returns true if `edge` is on a valid path from the `dominated_node(a)` to the `dominating_node(a)`, i.e., the edge is in the subgraph.
 
 Note: this is legal: `reachable_roots(a) ⊄ reachable_roots(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
-test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && subset(reachable_roots(a), reachable_roots(edge))
+test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
 
 
 reachable_dominance(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
@@ -212,56 +212,31 @@ function isa_connected_path(a::FactorableSubgraph, start_edge::PathEdge{T}) wher
 end
 
 
-function edges_on_path(a::FactorableSubgraph, start_edge::PathEdge{T}) where {T}
-    current_edge = start_edge
-    result = PathEdge{T}[]
-
-    if test_edge(a, start_edge) #ensure that start_edge satisfies conditions for being on a connected path
-        while forward_vertex(a, current_edge) != dominating_node(a)
-            current_edge = next_valid_edge(a, current_edge)
-            if current_edge === nothing
-                return (false, PathEdge{T}[])
-            else
-                push!(result, current_edge)
-            end
-        end
-        return (true, result)
-    else
-        return (false, PathEdge{T}[])
-    end
-end
-
-
 """
 split_non_dom_edges!(subgraph::FactorableSubgraph{T,S})
 
-Splits edges which have roots not in the `dominance_mask` of `subgraph`. Resets the reachability mask of dominated edges and creates, and returns, a list of new edges that have reachability mask corresponding to the non-dominant roots or variables."""
-function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}) where {T,S<:AbstractFactorableSubgraph}
+Splits edges which have roots not in the `dominance_mask` of `subgraph`. Resets the reachability mask of dominated edges and and returns a list of new edges that have reachability mask corresponding to the non-dominant roots or variables."""
+function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) where {T,S<:AbstractFactorableSubgraph}
     temp_edges = PathEdge{T}[]
 
-    for s_edge in forward_edges(subgraph, dominated_node(subgraph))
-        if test_edge(subgraph, s_edge)
-            for pedge in edge_path(subgraph, s_edge)
-                edge_mask = reachable_dominance(subgraph, pedge)
-                diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
-                if any(diff)
-                    gr = graph(subgraph)
+    for sub_edge in sub_edges
+        edge_mask = reachable_dominance(subgraph, sub_edge)
+        diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
+        if any(diff)
+            gr = graph(subgraph)
 
-                    if S === DominatorSubgraph
-                        push!(temp_edges, PathEdge(top_vertex(pedge), bott_vertex(pedge), value(pedge), copy(reachable_variables(pedge)), diff)) #create a new edge that accounts for roots not in the dominance mask
-                    else
+            if S === DominatorSubgraph
+                push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), copy(reachable_variables(sub_edge)), diff)) #create a new edge that accounts for roots not in the dominance mask
+            else
 
-                        push!(temp_edges, PathEdge(top_vertex(pedge), bott_vertex(pedge), value(pedge), diff, copy(reachable_roots(pedge)))) #create a new edge that accounts for roots not in the     dominance mask    
-                    end
-
-                    edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
-                end
+                push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), diff, copy(reachable_roots(sub_edge)))) #create a new edge that accounts for roots not in the     dominance mask    
             end
+
+            edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
         end
     end
     return temp_edges
 end
-
 
 
 function check_edges(subgraph::FactorableSubgraph{T,S}, edge_list::Vector{PathEdge{T}}) where {T,S}
@@ -272,11 +247,7 @@ function check_edges(subgraph::FactorableSubgraph{T,S}, edge_list::Vector{PathEd
             count += 1
         end
     end
-    if count < 2
-        return false
-    else
-        return true
-    end
+    return count
 end
 
 """
@@ -334,48 +305,56 @@ end
 
 Returns true if the subgraph is still a factorable subgraph, false otherwise"""
 function subgraph_exists(subgraph::FactorableSubgraph)
-    #Do fast tests that guarantee subgraph has been destroyed by factorization: no edges connected to dominated node, dominated_node or dominator node has < 2 subgraph edges
-    #This is inefficient since many tests require just the number of edges but this code creates temp arrays containing the edges and then measures the length. Optimize later by having separate children and parents fields in edges structure of RnToRmGraph. Then num_parents and num_children become fast and allocation free.
 
-    #need at least two parent edges from dominated_node or subgraph doesn't exist
-    fedges = forward_edges(subgraph, dominated_node(subgraph))
-    bedges = backward_edges(subgraph, dominating_node(subgraph))
-
-    if length(fedges) < 2 || length(bedges) < 2 #need at least two forward edges from dominated_node and two backward edges from dominating node or subgraph doesn't exist
-        return false
-    elseif !check_edges(subgraph, fedges) #verify that all edges have correct reachability to be on a valid path from dominated node to dominating node
-        return false
-    elseif !check_edges(subgraph, bedges)
-        return false
+    if is_branching(subgraph) #branching subgraphs always exist
+        return true
     else
-        count = 0
-        sub_edges = Set{PathEdge}()
+        #subgraph isn't branching so isa_connected_path should work correctly
 
-        for edge in fedges
-            if isa_connected_path(subgraph, edge) !== nothing
-                count += 1
-            end
+        #Do fast tests that guarantee subgraph has been destroyed by factorization: no edges connected to dominated node, dominated_node or dominator node has < 2 subgraph edges
+        #This is inefficient since many tests require just the number of edges but this code creates temp arrays containing the edges and then measures the length. Optimize later by having separate children and parents fields in edges structure of RnToRmGraph. Then num_parents and num_children become fast and allocation free.
 
-            # @invariant begin
-            #     good_edges, tmp = edges_on_path(subgraph, edge)
-            #     good_subgraph = true
+        #need at least two parent edges from dominated_node or subgraph doesn't exist
+        fedges = forward_edges(subgraph, dominated_node(subgraph))
+        bedges = backward_edges(subgraph, dominating_node(subgraph))
 
-            #     if good_edges
-            #         for pedge in tmp
-            #             if in(pedge, sub_edges)
-            #                 good_subgraph = false
-            #                 break
-            #             end
-            #             push!(sub_edges, pedge)
-            #         end
-            #     end
-            #     good_subgraph
-            # end "Visited edge $(vertices(pedge)) more than once in subgraph $(vertices(subgraph)). Edges in factorable subgraph should only be visited once. "
-        end
-        if count >= 2
-            return true
-        else
+        if length(fedges) < 2 || length(bedges) < 2 #need at least two forward edges from dominated_node and two backward edges from dominating node or subgraph doesn't exist
             return false
+            #Not all forward or backward edges need be part of the subgraph but at least two of them need to be.
+        elseif check_edges(subgraph, fedges) < 2 #verify that all edges have correct reachability to be on a valid path from dominated node to dominating node
+            return false
+        elseif check_edges(subgraph, bedges) < 2
+            return false
+        else
+            count = 0
+            sub_edges = Set{PathEdge}()
+
+            for edge in fedges
+                if isa_connected_path(subgraph, edge) !== nothing
+                    count += 1
+                end
+
+                # @invariant begin
+                #     good_edges, tmp = edges_on_path(subgraph, edge)
+                #     good_subgraph = true
+
+                #     if good_edges
+                #         for pedge in tmp
+                #             if in(pedge, sub_edges)
+                #                 good_subgraph = false
+                #                 break
+                #             end
+                #             push!(sub_edges, pedge)
+                #         end
+                #     end
+                #     good_subgraph
+                # end "Visited edge $(vertices(pedge)) more than once in subgraph $(vertices(subgraph)). Edges in factorable subgraph should only be visited once. "
+            end
+            if count >= 2
+                return true
+            else
+                return false
+            end
         end
     end
 end

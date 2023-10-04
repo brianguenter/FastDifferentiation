@@ -278,74 +278,6 @@ function reclaim_edge_vector(edges::Vector{PathEdge{Int64}})
     return nothing
 end
 
-function old_edge_path(next_node_constraint, dominating::T, is_dominator::Bool, reachable_mask::BitVector, current_edge) where {T}
-    flag_value = 1
-    result = PathEdge{Int64}[]
-
-    roots_reach = copy(reachable_roots(current_edge))
-    vars_reach = copy(reachable_variables(current_edge))
-
-    while true
-        push!(result, current_edge)
-        if is_dominator && top_vertex(current_edge) == dominating
-            break
-        end
-        if !is_dominator && bott_vertex(current_edge) == dominating
-            break
-        end
-        tmp = get_edge_vector()
-        relation_edges!(next_node_constraint, current_edge, tmp)
-
-        if is_dominator
-            filter!(x -> subset(reachable_mask, reachable_variables(x)), tmp) #only accept edges which have reachable roots and variables that match the subgraph
-        else
-            filter!(x -> subset(reachable_mask, reachable_roots(x)), tmp)
-        end
-
-        #These two cases can only occur if the subgraph has been destroyed by factorization
-        if length(tmp) == 0  #there is no edge beyond current_edge that leads to the dominating node. 
-            reclaim_edge_vector(tmp)
-            flag_value = 0
-            break
-        elseif length(tmp) ≥ 2 #there is a branch in the edge path  
-            reclaim_edge_vector(tmp)
-            flag_value = 2
-            break
-        end
-
-        current_edge = tmp[1]
-        roots_reach .= roots_reach .& reachable_roots(current_edge)
-        vars_reach .= vars_reach .& reachable_variables(current_edge) #update reachable roots/variables of the entire path. Sum is only good over this subset
-        reclaim_edge_vector(tmp)
-    end
-
-    return flag_value, result, roots_reach, vars_reach
-end
-
-function evaluate_subgraph(subgraph::FactorableSubgraph{T,S}) where {T,S<:Union{DominatorSubgraph,PostDominatorSubgraph}}
-    constraint = next_edge_constraint(subgraph)
-    sum = Node(0.0)
-
-    rel_edges = get_edge_vector()
-    for edge in relation_edges!(constraint, dominated_node(subgraph), rel_edges)
-        flag, pedges, roots_reach, vars_reach = old_edge_path(constraint, dominating_node(subgraph), S == DominatorSubgraph, reachable(subgraph), edge)
-        #sort by num_uses then from largest to smallest postorder number
-
-        if flag == 1 #non-branching path through subgraph
-
-            sort!(pedges, lt=path_sort_order)
-            sum += multiply_sequence(pedges)
-
-            #find sequences of equal times_used and multiply them. Then multiply each of the collapsed sequences to get the final result
-            reclaim_edge_vector(pedges)
-        end
-    end
-
-
-    reclaim_edge_vector(rel_edges)
-    return sum
-end
-
 function make_factored_edge(subgraph::FactorableSubgraph{T,DominatorSubgraph}, sum::Node) where {T}
     roots_reach = copy(reachable_dominance(subgraph))
     vars_reach = copy(reachable_variables(subgraph))
@@ -366,24 +298,7 @@ function check_sub_edges(subgraph, sub_edges)
         push!(node_set, backward_vertex(subgraph, edge))
     end
 
-    # if dominating_node(subgraph) ∉ node_set
-    #     show(subgraph)
-    #     
-    # end
-
-    if dominating_node(subgraph) ∉ node_set
-        # show(vertices.(sub_edges))
-        # show(dominating_node(subgraph))
-        # println()
-        # show(dominated_node(subgraph))
-        # println()
-        # show(node_set)
-        # println(typeof(subgraph))
-        subgraph_edges(subgraph)
-    end
-
-    @assert dominating_node(subgraph) ∈ node_set
-    @assert dominated_node(subgraph) ∈ node_set
+    return dominating_node(subgraph) ∈ node_set && dominated_node(subgraph) ∈ node_set
     #end check
 end
 
@@ -392,7 +307,9 @@ end
 function is_branching(subgraph)
     sub_edges = subgraph_edges(subgraph)
 
-    check_sub_edges(subgraph, sub_edges)
+    if !check_sub_edges(subgraph, sub_edges) #either or both of dominating/dominated node are not present in nodes of sub_edges so subgraph doesn't exist
+        return false
+    end
 
 
 
@@ -461,11 +378,15 @@ function interior_mask_bit(subgraph::FactorableSubgraph{T,DominatorSubgraph}, ve
     end
 end
 
+"""Finds edges which can bypass the dominated node"""
+# function find_bypass_edges(subgraph::Factorable)
+# end
+
 """Resets non dominant edge masks - for `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
 
 If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
-function reset_masks_branching!(subgraph::FactorableSubgraph{T}) where {T<:Integer}
-    sub_edges = subgraph_edges(subgraph)
+function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
+    edges_to_delete = PathEdge[]
     check_sub_edges(subgraph, sub_edges)
 
     edge_list = collect(sub_edges)
@@ -502,22 +423,18 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}) where {T<:Integ
         end
     end
 
-    edges_to_delete = PathEdge[]
 
     #use vertex masks to determine which edges can be reset
     for edge in edge_list
         vert = backward_vertex(subgraph, edge)
         vert_mask = vertex_masks[vert]
 
-        if !any(vert_mask) #no edges bypass the dominated node so can reset dominance bits
-            tmp = reachable_dominance(subgraph, edge)
-            tmp .= falses(dominance_dimension(subgraph)) #can set to all zeros because edges in the subgraph have been split into dom and non-dom edges.
-        end
-
-        tmp = reachable_non_dominance(subgraph, edge)
-        tmp .&= vertex_masks[vert]
-
-        if can_delete(edge)
+        if any(vert_mask) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
+            tmp = reachable_non_dominance(subgraph, edge)
+            tmp .= vert_mask #set the bypass mask
+        else #edge does not bypass the dominated node so delete it
+            tmp = reachable_non_dominance(subgraph, edge)
+            tmp .= falses(length(tmp)) #need to reset roots or variables otherwise edge deletion assertion will fail.
             push!(edges_to_delete, edge)
         end
     end
@@ -531,31 +448,14 @@ end
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
     local new_edge::PathEdge{T}
     if subgraph_exists(subgraph)
-        branching = is_branching(subgraph)
 
-        if branching #handle the uncommon case of factorization creating new factorable subgraphs internal to subgraph
-            sum = evaluate_branching_subgraph(subgraph)
-            new_edge = make_factored_edge(subgraph, sum)
-        else
-            sum = evaluate_subgraph(subgraph)
-            # if value(sum) == 0
-            #     display(subgraph)
-            #     write_dot("sph.svg", graph(subgraph), value_labels=true, reachability_labels=false, start_nodes=[24])
-            # end
+        sub_edges = subgraph_edges(subgraph)
+        sum = evaluate_subgraph(subgraph, sub_edges)
+        new_edge = make_factored_edge(subgraph, sum)
 
-            # # @assert value(sum) != 0
+        non_dom_edges = split_non_dom_edges!(subgraph, sub_edges)
 
-            new_edge = make_factored_edge(subgraph, sum)
-        end
-        non_dom_edges = split_non_dom_edges!(subgraph)
-        #reset roots in R, if possible. All edges earlier in the path than the first vertex with more than one child cannot be reset.
-        # if branching
-        #     edges_to_delete = reset_masks_branching!(subgraph)
-        # else
-        #     edges_to_delete = reset_edge_masks!(subgraph)
-        # end
-
-        edges_to_delete = reset_masks_branching!(subgraph)
+        edges_to_delete = reset_masks_branching!(subgraph, sub_edges)
 
         gr = graph(subgraph)
         for edge in non_dom_edges
@@ -625,8 +525,7 @@ end
 #     return vertex_sums[dominating_node(subgraph)]
 # end
 
-function evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}) where {T}
-    sub_edges, sub_nodes = deconstruct_subgraph(subgraph)
+function evaluate_subgraph(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
     vertex_sums = Dict{T,Node}()
     vertex_sums[dominated_node(subgraph)] = 1
     # Vis.draw_dot(subgraph)
