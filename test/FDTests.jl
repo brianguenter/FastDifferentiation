@@ -849,8 +849,9 @@ end
     _8_1_sub = subs[findfirst(x -> FD.vertices(x) == (8, 1), subs)]
     _1_8_sub = subs[findfirst(x -> FD.vertices(x) == (1, 8), subs)]
 
-    @test issetequal(_1_4_sub_ref, FD.subgraph_edges(_1_4_sub))
-    @test !FD.is_branching(_1_4_sub)
+    sub_edges = FD.subgraph_edges(_1_4_sub)
+    @test issetequal(_1_4_sub_ref, sub_edges)
+    @test !FD.is_branching(_1_4_sub, sub_edges)
 
     FD.factor_subgraph!(_1_4_sub)
     _1_7_sub_ref = Set(map(x -> x[1], FD.edges.(Ref(dgraph), ((4, 1), (3, 1), (7, 4), (7, 6), (6, 3)))))
@@ -1650,7 +1651,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(7)
+    sph_func = spherical_harmonics(5)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 

@@ -290,29 +290,28 @@ function make_factored_edge(subgraph::FactorableSubgraph{T,PostDominatorSubgraph
     return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
 end
 
-function check_sub_edges(subgraph, sub_edges)
-    #compute all nodes in subgraph
-    node_set = Set{Int64}()
+
+"""returns the number of subgraph edges incident on `dominated_node(subgraph)` and `dominating_node(subgraph)`"""
+function dom_nodes_edge_count(subgraph, sub_edges)
+    dominating_edges = PathEdge[]
+    dominated_edges = PathEdge[]
     for edge in sub_edges
-        push!(node_set, forward_vertex(subgraph, edge))
-        push!(node_set, backward_vertex(subgraph, edge))
+        if dominating_node(subgraph) == forward_vertex(subgraph, edge)
+            push!(dominating_edges, edge)
+        end
+
+        if dominated_node(subgraph) == backward_vertex(subgraph, edge)
+            push!(dominated_edges, edge)
+        end
     end
 
-    return dominating_node(subgraph) ∈ node_set && dominated_node(subgraph) ∈ node_set
-    #end check
+    return dominated_edges, dominating_edges
 end
+
 
 """Returns true if a new factorable subgraph was created inside `subgraph` during the factorization process. This will cause a branch internal to the subgraph. `subgraph_exists` should be called before executing this function otherwise it may return false when no new subgraphs have been created."""
 
-function is_branching(subgraph)
-    sub_edges = subgraph_edges(subgraph)
-
-    if !check_sub_edges(subgraph, sub_edges) #either or both of dominating/dominated node are not present in nodes of sub_edges so subgraph doesn't exist
-        return false
-    end
-
-
-
+function is_branching(subgraph, sub_edges)
     for edge in sub_edges
         #look for a an upward branch
         if forward_vertex(subgraph, edge) != dominating_node(subgraph)
@@ -378,16 +377,20 @@ function interior_mask_bit(subgraph::FactorableSubgraph{T,DominatorSubgraph}, ve
     end
 end
 
+function is_reachable(subgraph, edge)
+    any(reachable_dominance(subgraph, edge)) && any(reachable_non_dominance(subgraph, edge))
+end
+
+
 """Finds edges which can bypass the dominated node"""
 # function find_bypass_edges(subgraph::Factorable)
 # end
 
-"""Resets non dominant edge masks - for `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
+"""Resets non dominant edge masks and finds edges which can be deleted. For `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
 
 If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
 function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
     edges_to_delete = PathEdge[]
-    check_sub_edges(subgraph, sub_edges)
 
     edge_list = collect(sub_edges)
 
@@ -432,6 +435,7 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) wher
         if any(vert_mask) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
             tmp = reachable_non_dominance(subgraph, edge)
             tmp .= vert_mask #set the bypass mask
+            @assert is_reachable(subgraph, edge)
         else #edge does not bypass the dominated node so delete it
             tmp = reachable_non_dominance(subgraph, edge)
             tmp .= falses(length(tmp)) #need to reset roots or variables otherwise edge deletion assertion will fail.
@@ -446,14 +450,20 @@ end
 
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
-    local new_edge::PathEdge{T}
-    if subgraph_exists(subgraph)
 
-        sub_edges = subgraph_edges(subgraph)
+    sub_edges = subgraph_edges(subgraph)
+    local new_edge::PathEdge{T}
+    if subgraph_exists(subgraph, sub_edges)
+
+
         sum = evaluate_subgraph(subgraph, sub_edges)
+
         new_edge = make_factored_edge(subgraph, sum)
+        @assert is_reachable(subgraph, new_edge)
 
         non_dom_edges = split_non_dom_edges!(subgraph, sub_edges)
+
+        @assert all(is_reachable.(Ref(subgraph), non_dom_edges))
 
         edges_to_delete = reset_masks_branching!(subgraph, sub_edges)
 
@@ -585,9 +595,15 @@ function factor!(a::DerivativeGraph{T}) where {T}
 
         subgraph = pop!(subgraph_list)
 
+
         factor_subgraph!(subgraph)
 
+        for edge in unique_edges(a)
+            @assert any(reachable_variables(edge)) && any(reachable_roots(edge))
+        end
+
     end
+
     return nothing #return nothing so people don't mistakenly think this is returning a copy of the original graph
 end
 

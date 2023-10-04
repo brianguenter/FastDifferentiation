@@ -223,8 +223,6 @@ function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) wher
         edge_mask = reachable_dominance(subgraph, sub_edge)
         diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
         if any(diff)
-            gr = graph(subgraph)
-
             if S === DominatorSubgraph
                 push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), copy(reachable_variables(sub_edge)), diff)) #create a new edge that accounts for roots not in the dominance mask
             else
@@ -235,6 +233,13 @@ function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) wher
             edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
         end
     end
+
+    #split non-dom edges should not have zero reachability
+    for edge in temp_edges
+        @assert any(reachable_dominance(subgraph, edge))
+        @assert any(reachable_non_dominance(subgraph, edge))
+    end
+
     return temp_edges
 end
 
@@ -281,10 +286,6 @@ function subgraph_edges(subgraph::FactorableSubgraph{T}, sub_edges::Union{Nothin
             end
         end
     end
-
-
-    # @assert length(sub_edges) ≥ 2 "If subgraph exists should be at least two valid edges in subgraph. Instead got none."
-
     return sub_edges
 end
 
@@ -304,56 +305,38 @@ end
     subgraph_exists(subgraph::FactorableSubgraph)
 
 Returns true if the subgraph is still a factorable subgraph, false otherwise"""
-function subgraph_exists(subgraph::FactorableSubgraph)
-
-    if is_branching(subgraph) #branching subgraphs always exist
-        return true
+function subgraph_exists(subgraph::FactorableSubgraph, sub_edges)
+    dominated_edges, dominating_edges = dom_nodes_edge_count(subgraph, sub_edges)
+    if length(dominated_edges) == 0 || length(dominating_edges) == 0 #either or both of dominating/dominated node are not present in nodes of sub_edges so subgraph has been destroyed by previous factorization.
+        return false
     else
-        #subgraph isn't branching so isa_connected_path should work correctly
+        tmp = is_branching(subgraph, sub_edges)
 
-        #Do fast tests that guarantee subgraph has been destroyed by factorization: no edges connected to dominated node, dominated_node or dominator node has < 2 subgraph edges
-        #This is inefficient since many tests require just the number of edges but this code creates temp arrays containing the edges and then measures the length. Optimize later by having separate children and parents fields in edges structure of RnToRmGraph. Then num_parents and num_children become fast and allocation free.
-
-        #need at least two parent edges from dominated_node or subgraph doesn't exist
-        fedges = forward_edges(subgraph, dominated_node(subgraph))
-        bedges = backward_edges(subgraph, dominating_node(subgraph))
-
-        if length(fedges) < 2 || length(bedges) < 2 #need at least two forward edges from dominated_node and two backward edges from dominating node or subgraph doesn't exist
-            return false
-            #Not all forward or backward edges need be part of the subgraph but at least two of them need to be.
-        elseif check_edges(subgraph, fedges) < 2 #verify that all edges have correct reachability to be on a valid path from dominated node to dominating node
-            return false
-        elseif check_edges(subgraph, bedges) < 2
-            return false
+        if tmp#subgraph_edges recursively visits the subgraph edges from the dominated to the dominating node. check_sub_edges returned true, which means the dominated and dominating vertices are present in the vertices of sub_edges. This means there must be at least one path from the dominated to the dominating vertex
+            return true
         else
-            count = 0
-            sub_edges = Set{PathEdge}()
+            #subgraph isn't branching so isa_connected_path should work correctly
 
-            for edge in fedges
-                if isa_connected_path(subgraph, edge) !== nothing
-                    count += 1
-                end
+            #Do fast tests that guarantee subgraph has been destroyed by factorization: no edges connected to dominated node, dominated_node or dominator node has < 2 subgraph edges
+            #This is inefficient since many tests require just the number of edges but this code creates temp arrays containing the edges and then measures the length. Optimize later by having separate children and parents fields in edges structure of RnToRmGraph. Then num_parents and num_children become fast and allocation free.
 
-                # @invariant begin
-                #     good_edges, tmp = edges_on_path(subgraph, edge)
-                #     good_subgraph = true
-
-                #     if good_edges
-                #         for pedge in tmp
-                #             if in(pedge, sub_edges)
-                #                 good_subgraph = false
-                #                 break
-                #             end
-                #             push!(sub_edges, pedge)
-                #         end
-                #     end
-                #     good_subgraph
-                # end "Visited edge $(vertices(pedge)) more than once in subgraph $(vertices(subgraph)). Edges in factorable subgraph should only be visited once. "
-            end
-            if count >= 2
-                return true
-            else
+            #in a non-branching graph need at least two subgraph edges incident on the dominated_node and the dominating_node. Otherwise subgraph has been destroyed by a previous factorization.
+            if length(dominated_edges) < 2 || length(dominating_edges) < 2
                 return false
+            else
+                count = 0
+                sub_edges = Set{PathEdge}()
+
+                for edge in dominated_edges
+                    if isa_connected_path(subgraph, edge) !== nothing
+                        count += 1
+                    end
+                end
+                if count >= 2 #only have a valid subgraph if there are at least two complete paths from the dominated to the dominatind node
+                    return true
+                else
+                    return false
+                end
             end
         end
     end
