@@ -597,11 +597,6 @@ function factor!(a::DerivativeGraph{T}) where {T}
 
 
         factor_subgraph!(subgraph)
-
-        for edge in unique_edges(a)
-            @assert any(reachable_variables(edge)) && any(reachable_roots(edge))
-        end
-
     end
 
     return nothing #return nothing so people don't mistakenly think this is returning a copy of the original graph
