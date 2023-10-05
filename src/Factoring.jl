@@ -4,11 +4,11 @@ next_edge_constraint(sub::FactorableSubgraph{T,DominatorSubgraph}) where {T} = P
 top_down_constraint(sub::FactorableSubgraph{T,DominatorSubgraph}) where {T} = PathConstraint()
 
 """Evaluates the subgraph, creates a new edge with this value, and then inserts the new edge into `graph`"""
-function add_edge!(graph::DerivativeGraph, subgraph::FactorableSubgraph, subgraph_value::Node)
-    verts = vertices(subgraph)
-    edge = PathEdge(verts[1], verts[2], subgraph_value, reachable_variables(subgraph), reachable_roots(subgraph))
-    add_edge!(graph, edge)
-end
+# function add_edge!(graph::DerivativeGraph, subgraph::FactorableSubgraph, subgraph_value::Node)
+#     verts = vertices(subgraph)
+#     edge = PathEdge(verts[1], verts[2], subgraph_value, reachable_variables(subgraph), reachable_roots(subgraph))
+#     add_edge!(graph, edge)
+# end
 
 
 function format_string(rv_string)

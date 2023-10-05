@@ -137,8 +137,7 @@ function draw_dot(graph; start_nodes::Union{Nothing,AbstractVector{Int}}=nothing
         start_nodes=start_nodes,
         graph_label=graph_label,
         reachability_labels=reachability_labels,
-        value_labels=value_labels,
-        no_path_edges=true)
+        value_labels=value_labels)
     svg = read(name * ".svg", String)
     display("image/svg+xml", svg)
 end
