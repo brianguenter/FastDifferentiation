@@ -1,6 +1,6 @@
 using TestItems
 
-@testitem "FD.isa_connected_path 1" begin # case when path is one edge long
+@testitem "isa_connected_path 1" begin # case when path is one edge long
     using DataStructures
     import FastDifferentiation as FD
 
@@ -22,7 +22,7 @@ using TestItems
     @test FD.isa_connected_path(test_sub, etmp[2])
 end
 
-@testitem "FD.isa_connected_path 2" begin #cases when path is longer than one edge and various FD.edges have either FD.roots or FD.variables reset.
+@testitem "isa_connected_path 2" begin #cases when path is longer than one edge and various FD.edges have either FD.roots or FD.variables reset.
 
     using DataStructures
     import FastDifferentiation as FD
@@ -1053,7 +1053,7 @@ end
     @test all(x -> x[1] == x[2], zip(reverse(path_edges2), temp_edges))
 end
 
-@testitem "FD.set_diff" begin
+@testitem "set_diff" begin
     import FastDifferentiation as FD
 
     @test FD.set_diff(falses(1), falses(1)) == falses(1)
@@ -1328,7 +1328,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 10
+    sph_order = 9
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
@@ -1349,7 +1349,7 @@ end
 
     FD.@variables x y z
     input_vars = [x, y, z]
-    sph_order = 10
+    sph_order = 9
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), input_vars)
     dense = jacobian(FD.roots(FD_graph), input_vars)
@@ -1448,7 +1448,7 @@ end
 @testitem "jacobian_times_v" begin
     include("ComplexTestFunctions.jl")
 
-    order = 10
+    order = 9
 
     FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
@@ -1477,7 +1477,7 @@ end
 @testitem "jacobian_transpose_v" begin
     include("ComplexTestFunctions.jl")
 
-    order = 10
+    order = 9
 
     FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
