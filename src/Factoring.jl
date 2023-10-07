@@ -3,14 +3,6 @@ next_edge_constraint(sub::FactorableSubgraph{T,PostDominatorSubgraph}) where {T}
 next_edge_constraint(sub::FactorableSubgraph{T,DominatorSubgraph}) where {T} = PathConstraint(dominating_node(sub), graph(sub), true, reachable_dominance(sub), reachable_variables(sub))
 top_down_constraint(sub::FactorableSubgraph{T,DominatorSubgraph}) where {T} = PathConstraint()
 
-"""Evaluates the subgraph, creates a new edge with this value, and then inserts the new edge into `graph`"""
-# function add_edge!(graph::DerivativeGraph, subgraph::FactorableSubgraph, subgraph_value::Node)
-#     verts = vertices(subgraph)
-#     edge = PathEdge(verts[1], verts[2], subgraph_value, reachable_variables(subgraph), reachable_roots(subgraph))
-#     add_edge!(graph, edge)
-# end
-
-
 function format_string(rv_string)
     tmp = ""
     for (i, rstr) in pairs(rv_string)
@@ -377,21 +369,12 @@ function interior_mask_bit(subgraph::FactorableSubgraph{T,DominatorSubgraph}, ve
     end
 end
 
+"""Returns true if at least one root and at least one variable are reachable from the edge, false otherwise."""
 function is_reachable(subgraph, edge)
     any(reachable_dominance(subgraph, edge)) && any(reachable_non_dominance(subgraph, edge))
 end
 
-
-"""Finds edges which can bypass the dominated node"""
-# function find_bypass_edges(subgraph::Factorable)
-# end
-
-"""Resets non dominant edge masks and finds edges which can be deleted. For `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
-
-If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
-function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
-    edges_to_delete = PathEdge[]
-
+function compute_vertex_masks!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
     edge_list = collect(sub_edges)
 
     sort_edge_list!(subgraph, edge_list) #sorts edges by postorder for DominatorSubgraph and reverse postorder for PostDominatorSubgraph.
@@ -425,20 +408,41 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) wher
             end
         end
     end
+    return vertex_masks
+end
 
+"""If edge can be deleted returns true. If not then it resets the bit mask of edge and returns false"""
+function is_deletable(vertex_masks, subgraph, edge)
+    vert = backward_vertex(subgraph, edge)
+    vert_mask = vertex_masks[vert]
+
+    if any(vert_mask) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
+        tmp = reachable_non_dominance(subgraph, edge)
+        tmp .= vert_mask #set the bypass mask
+        @assert is_reachable(subgraph, edge)
+        return false
+    else #edge does not bypass the dominated node so delete it
+        tmp = reachable_non_dominance(subgraph, edge)
+        tmp .= falses(length(tmp)) #need to reset roots or variables otherwise edge deletion assertion will fail.
+        return true
+    end
+end
+
+"""Finds edges which can bypass the dominated node"""
+# function find_bypass_edges(subgraph::Factorable)
+# end
+
+"""Resets non dominant edge masks and finds edges which can be deleted. For `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
+
+If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
+function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
+    edges_to_delete = PathEdge[]
+
+    vertex_masks = compute_vertex_masks!(subgraph, sub_edges)
 
     #use vertex masks to determine which edges can be reset
-    for edge in edge_list
-        vert = backward_vertex(subgraph, edge)
-        vert_mask = vertex_masks[vert]
-
-        if any(vert_mask) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
-            tmp = reachable_non_dominance(subgraph, edge)
-            tmp .= vert_mask #set the bypass mask
-            @assert is_reachable(subgraph, edge)
-        else #edge does not bypass the dominated node so delete it
-            tmp = reachable_non_dominance(subgraph, edge)
-            tmp .= falses(length(tmp)) #need to reset roots or variables otherwise edge deletion assertion will fail.
+    for edge in sub_edges
+        if is_deletable(vertex_masks, subgraph, edge)
             push!(edges_to_delete, edge)
         end
     end
@@ -446,6 +450,35 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) wher
     return edges_to_delete
 end
 
+"""ensures that no paths are discontinous, e.g, the child edges of a node have reachable_roots that are not reachable fromt the parent edges."""
+function check_continuity(graph, vertex)
+    continuous = true
+    pedges = parent_edges(graph, vertex)
+    cedges = child_edges(graph, vertex)
+
+    if length(pedges) > 0 && length(cedges) > 0
+        parent_roots = reduce(.|, reachable_roots.(pedges))
+        non_constant = filter(x -> !is_constant(node(graph, bott_vertex(x))), (cedges))
+        child_roots = reduce(.|, reachable_roots.(non_constant))
+
+        roots_eq = bit_equal(parent_roots, child_roots)
+        if !roots_eq
+            continuous = false
+            @info "at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots))"
+        end
+
+        parent_variables = reduce(.|, reachable_variables.(pedges))
+        child_variables = reduce(.|, reachable_variables.(non_constant))
+        variables_eq = bit_equal(parent_variables, child_variables)
+        if !variables_eq
+            continuous = false
+            @info "at node $vertex reachable variables of parent and child edges differ for these root 
+            numbers $(findall(parent_variables .⊻ child_variables))"
+        end
+    end
+
+    return continuous
+end
 
 
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
@@ -466,6 +499,7 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         @assert all(is_reachable.(Ref(subgraph), non_dom_edges))
 
         edges_to_delete = reset_masks_branching!(subgraph, sub_edges)
+
 
         gr = graph(subgraph)
         for edge in non_dom_edges
@@ -611,7 +645,7 @@ function follow_path(a::DerivativeGraph{T}, root_index::Integer, var_index::Inte
         if length(curr_edges) == 0
             break
         else
-            @assert length(curr_edges) == 1 "Should only be one path from root $root_index to variable $var_index. Instead have $(length(curr_edges)) children from node $current_node_index on the path"
+            @assert length(curr_edges) == 1 "Should only be one path from root $root_index to variable $var_index. Instead have $(length(curr_edges)) children from node $current_node_index on the path. These are the edges causing the error $curr_edges"
             push!(path_product, curr_edges[1])
             current_node_index = bott_vertex(curr_edges[1])
         end
@@ -647,43 +681,89 @@ end
 
 
 """Verifies that there is a single path from each root to each variable, if a path exists. This should be an invariant of the factored graph so it should always be true. But the algorithm is complex enough that it is easy to accidentally introduce errors when adding features. `verify_paths` has negligible runtime cost compared to factorization."""
-function _verify_paths(graph::DerivativeGraph, a::Int)
-    child_branches = child_edges(graph, a)
-    parent_branches = parent_edges(graph, a)
-    valid_graph = true
-
-    if length(parent_branches) > 1 #this simple test won't work if a branch is a child of another branch. Then could have 
-        roots_intersect = reduce(.&, reachable_roots.(parent_branches))
-        if !is_zero(roots_intersect)
-            valid_graph = false
-        end
-    end
-    if length(child_branches) > 1
-        vars_intersect = reduce(.&, reachable_variables.(child_branches))
-        if !is_zero(vars_intersect)
-            valid_graph = false
-        end
-    end
-
-    if !valid_graph
-        # FastDifferentiation.FastDifferentiationVisualizationExt.draw_dot(graph)
-        @info "failure"
-        @info "roots_intersect $roots_intersect"
-        # return false
+function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) where {T}
+    if get(visited, a, nothing) !== nothing #don't reprocess vertices that have already been visited.
+        return visited[a]
     else
-        for child in children(graph, a)
-            valid_graph &= _verify_paths(graph, child)
-        end
-    end
+        child_branches = child_edges(graph, a)
+        parent_branches = parent_edges(graph, a)
+        valid_graph = true
 
-    return valid_graph
+        if length(parent_branches) > 1
+            duplicate_reachables = falses(codomain_dimension(graph))
+            roots_intersect = falses(codomain_dimension(graph))
+            roots_intersect .|= reachable_roots(parent_branches[1])
+
+            for branch in @view(parent_branches[2:end])
+                tmp = roots_intersect .& reachable_roots(branch)
+
+                if any(tmp)
+                    valid_graph = false
+                    duplicate_reachables .|= tmp
+                else
+                    roots_intersect .= roots_intersect .| reachable_roots(branch)
+                end
+            end
+
+            if any(duplicate_reachables)
+                @info "duplicate paths to roots $(findall(duplicate_reachables)) from node $a"
+            end
+        end
+
+
+        if length(child_branches) > 1
+
+            non_const_branches = PathEdge[]
+
+            for branch in child_branches
+                if is_zero(reachable_variables(branch))
+                    @assert is_constant(node(graph, bott_vertex(branch)))
+                else
+                    push!(non_const_branches, branch)
+                end
+            end
+
+            if length(non_const_branches) > 1
+                duplicate_reachables = falses(domain_dimension(graph))
+                vars_intersect = falses(domain_dimension(graph))
+                vars_intersect .|= reachable_variables(non_const_branches[1])
+
+                for branch in @view(non_const_branches[2:end])
+                    tmp = vars_intersect .& reachable_variables(branch)
+
+                    if any(tmp)
+                        valid_graph = false
+                        duplicate_reachables .|= tmp
+                    else
+                        vars_intersect .= vars_intersect .| reachable_variables(branch)
+                    end
+                end
+
+                if any(duplicate_reachables)
+                    @info "duplicate paths to variables $(findall(duplicate_reachables)) from node $a"
+                end
+            end
+        end
+
+        child_paths = children(graph, a)
+        if child_paths !== nothing
+            for child in children(graph, a)
+                valid_graph = valid_graph & _verify_paths(graph, child, visited) #if any node has invalid paths valid_graph will be false
+            end
+        end
+
+        visited[a] = valid_graph && check_continuity(graph, a)
+
+        return valid_graph
+    end
 end
 
 """verifies that there is a single path from each root to each variable, if such a path exists."""
-function verify_paths(graph::DerivativeGraph)
-    return true #until can fix this so it both correctly verifies paths and does not take quadratic time.
+function verify_paths(graph::DerivativeGraph{T}) where {T}
+    visited = Dict{T,Bool}()
+
     for root in roots(graph)
-        if !_verify_paths(graph, postorder_number(graph, root))
+        if !_verify_paths(graph, postorder_number(graph, root), visited)
             return false
         end
     end

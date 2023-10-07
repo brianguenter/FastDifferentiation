@@ -216,6 +216,8 @@ end
 
 DerivativeGraph(root::Node) = DerivativeGraph([root]) #convenience constructor for single root functions
 
+
+
 nodes(a::DerivativeGraph) = a.nodes
 node(a::DerivativeGraph, node_index) = nodes(a)[node_index]
 
@@ -314,18 +316,32 @@ end
 
 edges(a::DerivativeGraph, verts::Tuple{Integer,Integer}) = edges(a, verts[1], verts[2])
 
+function exact_match(edge::PathEdge, edge_vector::Vector{PathEdge})
+    exact_match = false
+    for pedge in edge_vector
+        if pedge === edge
+            exact_match = true
+            break
+        end
+    end
+    return exact_match
+end
 """
     unique_edges(a::DerivativeGraph)
 
-This is not an especially fast function. Currently only used for testing and diagnostics so this isn't a problem."""
+This is not an especially fast function. Currently only used for testing and diagnostics so this isn't a problem. Tests for uniques by ObjectId, not by structural equality."""
 function unique_edges(a::DerivativeGraph)
-    edges_unique = Set{PathEdge}()
+    edges_unique = PathEdge[]
     for edge_vector in values(edges(a))
         for edge in parents(edge_vector)
-            push!(edges_unique, edge)
+            if !exact_match(edge, edges_unique)
+                push!(edges_unique, edge)
+            end
         end
         for edge in children(edge_vector)
-            push!(edges_unique, edge)
+            if !exact_match(edge, edges_unique)
+                push!(edges_unique, edge)
+            end
         end
     end
     return edges_unique
@@ -564,8 +580,10 @@ function add_edge!(graph::DerivativeGraph, edge::PathEdge)
         er = tmp[bott_vertex(edge)]
     end
 
-    push!(parents(er), edge)
+    #verify that variable reachability of edge is a subset of variable reachability of the child edges of the vertex already in the graph. Otherwise are introducing an illegal edge.
 
+
+    push!(parents(er), edge)
 
 
     #add edge to vertex list of nodes for which this will be a child edge
@@ -577,6 +595,7 @@ function add_edge!(graph::DerivativeGraph, edge::PathEdge)
         er = tmp[top_vertex(edge)] #vertex already in the graph so add edge to the list of edges connecting to this vertex
     end
     push!(children(er), edge)
+
     return nothing
 end
 
