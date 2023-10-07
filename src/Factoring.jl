@@ -458,6 +458,10 @@ function check_continuity(graph, vertex)
 
     if length(pedges) > 0 && length(cedges) > 0
         parent_roots = reduce(.|, reachable_roots.(pedges))
+        if is_root(graph, vertex)
+            parent_roots[root_postorder_to_index(graph, vertex)] = 1 #vertex is a root,  which will show up child_roots but not parent_roots so add it.
+        end
+
         non_constant = filter(x -> !is_constant(node(graph, bott_vertex(x))), (cedges))
         child_roots = reduce(.|, reachable_roots.(non_constant))
 
@@ -469,6 +473,10 @@ function check_continuity(graph, vertex)
 
         parent_variables = reduce(.|, reachable_variables.(pedges))
         child_variables = reduce(.|, reachable_variables.(non_constant))
+        if is_variable(graph, vertex)
+            child_variables[variable_postorder_to_index(graph, vertex)] = 1
+        end
+
         variables_eq = bit_equal(parent_variables, child_variables)
         if !variables_eq
             continuous = false
