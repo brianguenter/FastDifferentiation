@@ -403,7 +403,7 @@ function compute_vertex_masks!(subgraph::FactorableSubgraph{T}, sub_edges) where
                 if cedge ∉ sub_edges
                     tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
                 else
-                    tmp_mask .= tmp_mask .| vertex_masks[backward_vertex(subgraph, cedge)]
+                    tmp_mask .= tmp_mask .| (vertex_masks[backward_vertex(subgraph, cedge)] .& non_dominance_mask(subgraph, edge))
                 end
             end
         end
@@ -416,10 +416,9 @@ function is_deletable(vertex_masks, subgraph, edge)
     vert = backward_vertex(subgraph, edge)
     vert_mask = vertex_masks[vert]
 
-    if any(vert_mask) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
+    if any(vert_mask .& reachable_non_dominance(subgraph, edge)) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
         tmp = reachable_non_dominance(subgraph, edge)
-        tmp .= vert_mask #set the bypass mask
-        @assert is_reachable(subgraph, edge)
+        tmp .= vert_mask .& tmp #set the bypass mask
         return false
     else #edge does not bypass the dominated node so delete it
         tmp = reachable_non_dominance(subgraph, edge)
@@ -459,7 +458,7 @@ function check_continuity(graph, vertex)
     if length(pedges) > 0 && length(cedges) > 0
         parent_roots = reduce(.|, reachable_roots.(pedges))
         if is_root(graph, vertex)
-            parent_roots[root_postorder_to_index(graph, vertex)] = 1 #vertex is a root,  which will show up child_roots but not parent_roots so add it.
+            parent_roots[root_postorder_to_index(graph, vertex)] = 1 #vertex is a root,  which will show up in child_roots but not parent_roots so add it.
         end
 
         non_constant = filter(x -> !is_constant(node(graph, bott_vertex(x))), (cedges))
@@ -468,7 +467,7 @@ function check_continuity(graph, vertex)
         roots_eq = bit_equal(parent_roots, child_roots)
         if !roots_eq
             continuous = false
-            @info "at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots))"
+            @info "at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots)). parent_roots=$(findall(parent_roots))  child_roots = $(findall(child_roots))"
         end
 
         parent_variables = reduce(.|, reachable_variables.(pedges))
@@ -479,9 +478,9 @@ function check_continuity(graph, vertex)
 
         variables_eq = bit_equal(parent_variables, child_variables)
         if !variables_eq
-            continuous = false
-            @info "at node $vertex reachable variables of parent and child edges differ for these root 
-            numbers $(findall(parent_variables .⊻ child_variables))"
+            continuous = falseadd_edge!parent_branches
+            @info "at node $vertex reachable variables of parent and child edges differ for these variable
+            numbers $(findall(parent_variables .⊻ child_variables)). parent_roots=$(findall(parent_variables))  child_roots = $(findall(child_variables))"
         end
     end
 
@@ -519,6 +518,16 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         end
 
         add_edge!(graph(subgraph), new_edge)
+    end
+
+    #verify continuity at all vertices still remaining from the subgraph
+    for edge in sub_edges
+        if node_edges(graph(subgraph), bott_vertex(edge)) !== nothing
+            check_continuity(graph(subgraph), bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
+        end
+        if node_edges(graph(subgraph), top_vertex(edge)) !== nothing
+            check_continuity(graph(subgraph), bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
+        end
     end
 end
 
@@ -653,7 +662,7 @@ function follow_path(a::DerivativeGraph{T}, root_index::Integer, var_index::Inte
         if length(curr_edges) == 0
             break
         else
-            @assert length(curr_edges) == 1 "Should only be one path from root $root_index to variable $var_index. Instead have $(length(curr_edges)) children from node $current_node_index on the path. These are the edges causing the error $curr_edges"
+            @assert length(curr_edges) == 1 "Should only be one path from root $root_index to variable $var_index. Instead have $(length(curr_edges)) children from node $current_node_index on the path. These are the edges causing the error $(vertices.(curr_edges))"
             push!(path_product, curr_edges[1])
             current_node_index = bott_vertex(curr_edges[1])
         end
@@ -690,6 +699,13 @@ end
 
 """Verifies that there is a single path from each root to each variable, if a path exists. This should be an invariant of the factored graph so it should always be true. But the algorithm is complex enough that it is easy to accidentally introduce errors when adding features. `verify_paths` has negligible runtime cost compared to factorization."""
 function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) where {T}
+
+    function duplicates!(dups, branches, reachable_func)
+        for branch in branches
+            dups += reachable_func(branch)
+        end
+    end
+
     if get(visited, a, nothing) !== nothing #don't reprocess vertices that have already been visited.
         return visited[a]
     else
@@ -698,23 +714,12 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
         valid_graph = true
 
         if length(parent_branches) > 1
-            duplicate_reachables = falses(codomain_dimension(graph))
-            roots_intersect = falses(codomain_dimension(graph))
-            roots_intersect .|= reachable_roots(parent_branches[1])
+            duplicate_reachables = zeros(Int64, codomain_dimension(graph))
 
-            for branch in @view(parent_branches[2:end])
-                tmp = roots_intersect .& reachable_roots(branch)
+            duplicates!(duplicate_reachables, parent_branches, reachable_roots)
 
-                if any(tmp)
-                    valid_graph = false
-                    duplicate_reachables .|= tmp
-                else
-                    roots_intersect .= roots_intersect .| reachable_roots(branch)
-                end
-            end
-
-            if any(duplicate_reachables)
-                @info "duplicate paths to roots $(findall(duplicate_reachables)) from node $a"
+            if any(x -> x > 1, duplicate_reachables)
+                @info "duplicate paths to roots $(findall(x->x>1,duplicate_reachables)) from node $a"
             end
         end
 
@@ -732,23 +737,12 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
             end
 
             if length(non_const_branches) > 1
-                duplicate_reachables = falses(domain_dimension(graph))
-                vars_intersect = falses(domain_dimension(graph))
-                vars_intersect .|= reachable_variables(non_const_branches[1])
+                duplicate_reachables = zeros(Int64, domain_dimension(graph))
 
-                for branch in @view(non_const_branches[2:end])
-                    tmp = vars_intersect .& reachable_variables(branch)
+                duplicates!(duplicate_reachables, non_const_branches, reachable_variables)
 
-                    if any(tmp)
-                        valid_graph = false
-                        duplicate_reachables .|= tmp
-                    else
-                        vars_intersect .= vars_intersect .| reachable_variables(branch)
-                    end
-                end
-
-                if any(duplicate_reachables)
-                    @info "duplicate paths to variables $(findall(duplicate_reachables)) from node $a"
+                if any(x -> x > 1, duplicate_reachables)
+                    @info "duplicate paths to variables $(findall(x->x>1,duplicate_reachables)) from node $a"
                 end
             end
         end

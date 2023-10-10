@@ -583,12 +583,12 @@ end
     f2 = FD.Node(*, xy, n3) #postorder # 7
     rts = [f1, f2]
     graph = FD.DerivativeGraph(rts)
-    all_edges = FD.unique_edges(graph)
+    all_edges = Set(FD.unique_edges(graph))
 
     reset_test(all_edges, graph, FD.reachable_roots)
 
     graph = FD.DerivativeGraph(rts)
-    all_edges = FD.unique_edges(graph)
+    all_edges = Set(FD.unique_edges(graph))
 
     reset_test(all_edges, graph, FD.reachable_variables)
 end
@@ -1651,7 +1651,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(5)
+    sph_func = spherical_harmonics(7)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 
