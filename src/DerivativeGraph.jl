@@ -307,8 +307,8 @@ edges(a::DerivativeGraph) = a.edges
 
 returns edges that directly connect top_vert and bott_vert"""
 function edges(a::DerivativeGraph, vert1::Integer, vert2::Integer)
-    @assert 0 < vert1 ≤ length(nodes(a))
-    @assert 0 < vert2 ≤ length(nodes(a))
+    @assert 0 < vert1 ≤ length(nodes(a)) "vertex was not in the range 0..$(length(nodes(a))). Vertex value was $vert1"
+    @assert 0 < vert2 ≤ length(nodes(a)) "vertex was not in the range 0..$(length(nodes(a))). Vertex value was $vert2"
 
     (bott, top) = (extrema((vert1, vert2)))
     return filter(x -> bott_vertex(x) == bott, child_edges(a, top))

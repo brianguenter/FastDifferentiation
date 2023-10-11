@@ -455,31 +455,49 @@ function check_continuity(graph, vertex)
     pedges = parent_edges(graph, vertex)
     cedges = child_edges(graph, vertex)
 
+    function reachable_union(edges, reachable_function)
+        reach = similar(reachable_function(edges[1]))
+        reach .= 0
+
+        for tmp_reach in reachable_function.(edges)
+            reach .|= tmp_reach
+        end
+
+        return reach
+    end
+
     if length(pedges) > 0 && length(cedges) > 0
-        parent_roots = reduce(.|, reachable_roots.(pedges))
+        parent_roots = reachable_union(pedges, reachable_roots)
+
+        # parent_roots = reduce(.|, reachable_roots.(pedges)) #WARNING: this seems to cause overwriting of the original edge data. Not sure how.
+
         if is_root(graph, vertex)
             parent_roots[root_postorder_to_index(graph, vertex)] = 1 #vertex is a root,  which will show up in child_roots but not parent_roots so add it.
         end
 
         non_constant = filter(x -> !is_constant(node(graph, bott_vertex(x))), (cedges))
-        child_roots = reduce(.|, reachable_roots.(non_constant))
+        child_roots = reachable_union(non_constant, reachable_roots)
+        # child_roots = reduce(.|, reachable_roots.(non_constant))
 
         roots_eq = bit_equal(parent_roots, child_roots)
         if !roots_eq
             continuous = false
-            @info "at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots)). parent_roots=$(findall(parent_roots))  child_roots = $(findall(child_roots))"
+            @info "Continuity error at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots)). parent_roots=$(findall(parent_roots))  child_roots = $(findall(child_roots))"
         end
 
-        parent_variables = reduce(.|, reachable_variables.(pedges))
-        child_variables = reduce(.|, reachable_variables.(non_constant))
+        parent_variables = reachable_union(pedges, reachable_variables)
+        child_variables = reachable_union(non_constant, reachable_variables)
+        # parent_variables = reduce(.|, reachable_variables.(pedges))
+        # child_variables = reduce(.|, reachable_variables.(non_constant))
+
         if is_variable(graph, vertex)
             child_variables[variable_postorder_to_index(graph, vertex)] = 1
         end
 
         variables_eq = bit_equal(parent_variables, child_variables)
         if !variables_eq
-            continuous = falseadd_edge!parent_branches
-            @info "at node $vertex reachable variables of parent and child edges differ for these variable
+            continuous = false
+            @info "Continuity error at node $vertex reachable variables of parent and child edges differ for these variable
             numbers $(findall(parent_variables .⊻ child_variables)). parent_roots=$(findall(parent_variables))  child_roots = $(findall(child_variables))"
         end
     end
@@ -508,6 +526,7 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         edges_to_delete = reset_masks_branching!(subgraph, sub_edges)
 
 
+
         gr = graph(subgraph)
         for edge in non_dom_edges
             add_edge!(gr, edge)
@@ -520,15 +539,16 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         add_edge!(graph(subgraph), new_edge)
     end
 
-    #verify continuity at all vertices still remaining from the subgraph
+    #verify continuity at all vertices still remaining from the subgraph. This is wasteful because it potentially checks continuity twice for each vertex in the subgraph.
     for edge in sub_edges
         if node_edges(graph(subgraph), bott_vertex(edge)) !== nothing
             check_continuity(graph(subgraph), bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
         end
         if node_edges(graph(subgraph), top_vertex(edge)) !== nothing
-            check_continuity(graph(subgraph), bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
+            check_continuity(graph(subgraph), top_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
         end
     end
+
 end
 
 order!(::FactorableSubgraph{T,DominatorSubgraph}, nodes::Vector{T}) where {T<:Integer} = sort!(nodes,
