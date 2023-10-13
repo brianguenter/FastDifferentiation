@@ -449,60 +449,82 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) wher
     return edges_to_delete
 end
 
-"""ensures that no paths are discontinous, e.g, the child edges of a node have reachable_roots that are not reachable fromt the parent edges."""
+
+"""ensures that no paths are discontinous, e.g, the child edges of a node have reachable_roots that are not reachable fromt the parent edges. O(n^2) so only use for debugging, not release code."""
 function check_continuity(graph, vertex)
-    continuous = true
     pedges = parent_edges(graph, vertex)
     cedges = child_edges(graph, vertex)
 
-    function reachable_union(edges, reachable_function)
-        reach = similar(reachable_function(edges[1]))
-        reach .= 0
-
-        for tmp_reach in reachable_function.(edges)
-            reach .|= tmp_reach
-        end
-
-        return reach
-    end
-
     if length(pedges) > 0 && length(cedges) > 0
-        parent_roots = reachable_union(pedges, reachable_roots)
-
-        # parent_roots = reduce(.|, reachable_roots.(pedges)) #WARNING: this seems to cause overwriting of the original edge data. Not sure how.
-
-        if is_root(graph, vertex)
-            parent_roots[root_postorder_to_index(graph, vertex)] = 1 #vertex is a root,  which will show up in child_roots but not parent_roots so add it.
+        #find roots in parent edges and make sure all variable paths for these roots are present in the child edges
+        all_roots = falses(codomain_dimension(graph))
+        for edge in pedges
+            all_roots .= all_roots .| reachable_roots(edge)
         end
 
-        non_constant = filter(x -> !is_constant(node(graph, bott_vertex(x))), (cedges))
-        child_roots = reachable_union(non_constant, reachable_roots)
-        # child_roots = reduce(.|, reachable_roots.(non_constant))
 
-        roots_eq = bit_equal(parent_roots, child_roots)
-        if !roots_eq
-            continuous = false
-            @info "Continuity error at node $vertex reachable roots of parents and child edges differ for these root numbers $(findall(parent_roots .⊻ child_roots)). parent_roots=$(findall(parent_roots))  child_roots = $(findall(child_roots))"
+        root_indices = findall(all_roots)
+        p_reach_vars = falses(domain_dimension(graph))
+        c_reach_vars = falses(domain_dimension(graph))
+
+        for root_index in root_indices
+            p_reach_vars .= false
+            c_reach_vars .= false
+
+            variable_mask = trues(domain_dimension(graph))
+            if is_variable(graph, vertex)
+                variable_mask[variable_postorder_to_index(graph, vertex)] = 0
+            end
+
+            for edge in pedges
+                if reachable_roots(edge)[root_index]
+                    p_reach_vars .= p_reach_vars .| (reachable_variables(edge) .& variable_mask)
+                end
+            end
+
+            for edge in cedges
+                if reachable_roots(edge)[root_index]
+                    c_reach_vars = c_reach_vars .| reachable_variables(edge)
+                end
+            end
+
+            @assert bit_equal(p_reach_vars, c_reach_vars) "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
         end
 
-        parent_variables = reachable_union(pedges, reachable_variables)
-        child_variables = reachable_union(non_constant, reachable_variables)
-        # parent_variables = reduce(.|, reachable_variables.(pedges))
-        # child_variables = reduce(.|, reachable_variables.(non_constant))
-
-        if is_variable(graph, vertex)
-            child_variables[variable_postorder_to_index(graph, vertex)] = 1
+        #find roots in parent edges and make sure all variable paths for these roots are present in the child edges
+        all_variables = falses(domain_dimension(graph))
+        for edge in cedges
+            all_variables .= all_variables .| reachable_variables(edge)
         end
 
-        variables_eq = bit_equal(parent_variables, child_variables)
-        if !variables_eq
-            continuous = false
-            @info "Continuity error at node $vertex reachable variables of parent and child edges differ for these variable
-            numbers $(findall(parent_variables .⊻ child_variables)). parent_roots=$(findall(parent_variables))  child_roots = $(findall(child_variables))"
+        variable_indices = findall(all_variables)
+        p_reach_roots = falses(codomain_dimension(graph))
+        c_reach_roots = falses(codomain_dimension(graph))
+
+        for variable_index in variable_indices
+            p_reach_roots .= false
+            c_reach_roots .= false
+
+            root_mask = trues(codomain_dimension(graph))
+            if is_root(graph, vertex)
+                root_mask[root_postorder_to_index(graph, vertex)] = 0 #vertex is a root so parent edges will not have it in their reachable roots masks. Clear the bit so don't get erroneous continuity errors.
+            end
+
+            for edge in cedges
+                if reachable_variables(edge)[variable_index]
+                    c_reach_roots .= c_reach_roots .| (reachable_roots(edge) .& root_mask)
+                end
+            end
+
+            for edge in pedges
+                if reachable_variables(edge)[variable_index]
+                    p_reach_roots .= p_reach_roots .| reachable_roots(edge)
+                end
+            end
+
+            @assert bit_equal(p_reach_roots, c_reach_roots) "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
         end
     end
-
-    return continuous
 end
 
 
@@ -774,7 +796,8 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
             end
         end
 
-        visited[a] = valid_graph && check_continuity(graph, a)
+        check_continuity(graph, a)
+        visited[a] = valid_graph
 
         return valid_graph
     end
