@@ -247,8 +247,7 @@ returns iterator of indices of children of node"""
 children(a::DerivativeGraph, node_index::T) where {T<:Integer} = children(edges(a), node_index)
 
 
-
-each_vertex(a::DerivativeGraph) = 1:length(nodes(a))
+vertices(a::DerivativeGraph) = collect(keys(a.edges))
 roots(a::DerivativeGraph) = a.roots
 root(a::DerivativeGraph, root_index::Integer) = roots(a)[root_index]
 root_index_to_postorder_number(a::DerivativeGraph) = a.root_index_to_postorder_number

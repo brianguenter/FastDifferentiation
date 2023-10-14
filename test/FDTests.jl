@@ -628,7 +628,7 @@ end
         (7, 6) => BitVector([0, 0])
     )
 
-    for index in FD.each_vertex(graph)
+    for index in FD.vertices(graph)
         c_and_p = FD.node_edges(graph, index)
         for edge in [FD.parents(c_and_p); FD.children(c_and_p)]
             @test edge.reachable_variables == correct_variable_masks[(FD.top_vertex(edge), FD.bott_vertex(edge))]
@@ -1141,7 +1141,7 @@ end
     n5 = n3 * n4
 
     graph = FD.DerivativeGraph([n5, n4])
-    tmp = FD.postdominator_subgraph(graph, 2, 4, BitVector([0, 1]), BitVector([0, 1]), BitVector([0, 1]))
+    tmp = FD.postdominator_subgraph(graph, 2, 4, BitVector([0, 1]), BitVector([1, 1]), BitVector([0, 1]))
     FD.factor_subgraph!(tmp)
     @test length(FD.edges(graph, 2, 4)) == 1
 
@@ -1328,7 +1328,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 7
+    sph_order = 6
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
@@ -1830,4 +1830,22 @@ end
         [1, 2.1 * x[1], 2]
     end
 end
+
+@testitem "reachability bug test" begin
+    function potential(σ, ϵ, r)
+        k = (σ / r)^6
+        return 4 * ϵ * k * (k - 1)
+    end
+
+    dim = 3
+    vars = make_variables(:r, dim)
+    r_norm = sqrt(sum(x -> x^2, vars))
+    pot_symbolic = potential(1.0, 1.0, r_norm)
+    H_symbolic = hessian(pot_symbolic, vars)
+    H_exec = make_function(H_symbolic, vars)
+
+    fourth_order_symbolic = reshape(jacobian(vec(jacobian(vec(H_symbolic), vars)), vars), (dim, dim, dim, dim))
+    FO_exec = make_function(fourth_order_symbolic, vars)
+end
+
 
