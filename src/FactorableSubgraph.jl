@@ -231,8 +231,6 @@ function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) wher
             end
 
             edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
-            non_dom = reachable_non_dominance(subgraph, sub_edge)
-            non_dom .= non_dom .& .!non_dominance_mask(subgraph)
         end
     end
 

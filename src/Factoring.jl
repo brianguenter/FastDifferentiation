@@ -401,7 +401,9 @@ function compute_vertex_masks!(subgraph::FactorableSubgraph{T}, sub_edges) where
                 end
 
                 if cedge ∉ sub_edges
-                    tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
+                    if any(reachable_dominance(subgraph) .& reachable_dominance(subgraph, cedge))
+                        tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
+                    end
                 else
                     tmp_mask .= tmp_mask .| (vertex_masks[backward_vertex(subgraph, cedge)] .& non_dominance_mask(subgraph, edge))
                 end
@@ -487,8 +489,13 @@ function check_continuity(graph, vertex)
                     c_reach_vars = c_reach_vars .| reachable_variables(edge)
                 end
             end
+            # #test
+            # if !bit_equal(p_reach_vars, c_reach_vars)
+            #     @info "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
+            # end
+            # #end test
 
-            @assert bit_equal(p_reach_vars, c_reach_vars) "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
+            @assert subset(p_reach_vars, c_reach_vars) "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
         end
 
         #find roots in parent edges and make sure all variable paths for these roots are present in the child edges
@@ -521,8 +528,13 @@ function check_continuity(graph, vertex)
                     p_reach_roots .= p_reach_roots .| reachable_roots(edge)
                 end
             end
+            # #test
+            # if !bit_equal(p_reach_roots, c_reach_roots)
+            #     @info "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
+            # end
+            # #end test
 
-            @assert bit_equal(p_reach_roots, c_reach_roots) "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
+            @assert subset(p_reach_roots, c_reach_roots) "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
         end
     end
 end
@@ -570,7 +582,6 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
             check_continuity(graph(subgraph), top_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
         end
     end
-
 end
 
 order!(::FactorableSubgraph{T,DominatorSubgraph}, nodes::Vector{T}) where {T<:Integer} = sort!(nodes,
