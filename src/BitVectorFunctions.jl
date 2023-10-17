@@ -42,7 +42,7 @@ Returns the set that has all the elements of b removed from a.
 This allocates."""
 function set_diff(a::BitVector, b::BitVector)
     @assert length(a) == length(b)
-    return @. !(a & b) & a
+    return @. !b & a
 end
 
 
@@ -52,7 +52,7 @@ end
 Removes elements of b from a."""
 function set_diff!(a::BitVector, b::BitVector)
     @assert length(a) == length(b)
-    @. a = !(a & b) & a
+    @. a = !b & a
     return nothing
 end
 

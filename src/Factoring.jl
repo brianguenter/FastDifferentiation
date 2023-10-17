@@ -451,6 +451,62 @@ function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) wher
     return edges_to_delete
 end
 
+"""Find edges which bypass the non-dominant vertex of a subgraph. These edges must be preserved after factorization"""
+function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
+    edge_list = collect(sub_edges)
+
+    sort_edge_list!(subgraph, edge_list) #sorts edges by postorder for DominatorSubgraph and reverse postorder for PostDominatorSubgraph.
+
+    vertex_masks = Dict{T,BitVector}()
+    vertex_masks[dominated_node(subgraph)] = falses(non_dominance_dimension(subgraph)) #
+
+    #compute vertex masks for all edges
+    for edge in edge_list
+        vert = backward_vertex(subgraph, edge)
+        if vert != dominated_node(subgraph)
+            tmp_mask = get(vertex_masks, vert, nothing)
+            if tmp_mask === nothing
+                tmp_mask = falses(non_dominance_dimension(subgraph))
+                vertex_masks[vert] = tmp_mask
+            end
+
+            for cedge in backward_edges(subgraph, edge)
+                #check to see if a vertex in the subgraph is a root or variable that is not equal to the dominated_node.
+                back_vert = backward_vertex(subgraph, edge)
+                interior_mask = interior_mask_bit(subgraph, back_vert)
+                if interior_mask !== nothing
+                    tmp_mask .= tmp_mask .| interior_mask
+                end
+
+                if cedge ∉ sub_edges
+                    if any(reachable_dominance(subgraph) .& reachable_dominance(subgraph, cedge))
+                        tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
+                    end
+                else
+                    tmp_mask .= tmp_mask .| (vertex_masks[backward_vertex(subgraph, cedge)])
+                end
+            end
+        end
+    end
+
+    bypass_edges = PathEdge[]
+
+    for edge in sub_edges
+        back_mask = vertex_masks[backward_vertex(subgraph, edge)]
+        if any(back_mask)
+            if subgraph isa FactorableSubgraph{T,DominatorSubgraph}
+                bypass = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), copy(back_mask), reachable_dominance(subgraph))
+            else
+                bypass = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_dominance(subgraph), copy(back_mask))
+            end
+            push!(bypass_edges, bypass)
+        end
+    end
+
+    return bypass_edges
+end
+
+
 
 """ensures that no paths are discontinous, e.g, the child edges of a node have reachable_roots that are not reachable fromt the parent edges. O(n^2) so only use for debugging, not release code."""
 function check_continuity(graph, vertex)
@@ -553,21 +609,21 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         new_edge = make_factored_edge(subgraph, sum)
         @assert is_reachable(subgraph, new_edge)
 
-        non_dom_edges = split_non_dom_edges!(subgraph, sub_edges)
+        non_dom_edges = find_non_dom_edges(subgraph, sub_edges)
 
-        @assert all(is_reachable.(Ref(subgraph), non_dom_edges))
-
-        edges_to_delete = reset_masks_branching!(subgraph, sub_edges)
-
-
+        bypass_edges = find_bypass_edges(subgraph, sub_edges)
 
         gr = graph(subgraph)
         for edge in non_dom_edges
             add_edge!(gr, edge)
         end
 
-        for edge in edges_to_delete
-            delete_edge!(graph(subgraph), edge)
+        for edge in bypass_edges
+            add_edge!(gr, edge)
+        end
+
+        for edge in sub_edges
+            delete_edge!(graph(subgraph), edge, true)
         end
 
         add_edge!(graph(subgraph), new_edge)
@@ -755,7 +811,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
 
     function duplicates!(dups, branches, reachable_func)
         for branch in branches
-            dups += reachable_func(branch)
+            dups += reachable_func(branch) #reachable_func(branch) returns a BitVector. In Julia a bit can be added to an Int. If there is a reachable bit set in index i of branch then 1 will be added to dups[i].
         end
     end
 

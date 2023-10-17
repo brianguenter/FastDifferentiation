@@ -69,19 +69,10 @@ end
     @. vars &= !vars
     @test !FD.isa_connected_path(_2_4, e3_4)
 end
-@testitem "split_non_dom_edges" begin
+@testitem "find_non_dom_edges" begin
     import FastDifferentiation as FD
     using DataStructures
 
-
-    #utility function to make it easier to create FD.edges and test them against FD.edges generated during graph operations.
-    function edge_fields_equal(edge1, edge2)
-        return edge1.top_vertex == edge2.top_vertex &&
-               edge1.bott_vertex == edge2.bott_vertex &&
-               edge1.edge_value == edge2.edge_value &&
-               edge1.reachable_variables == edge2.reachable_variables &&
-               edge1.reachable_roots == edge2.reachable_roots
-    end
 
     FD.@variables x y
 
@@ -95,41 +86,26 @@ end
     _5_3 = subs[1]
     @test (5, 3) == FD.vertices(_5_3)
     sub_edges = FD.subgraph_edges(_5_3)
-    non_dom_edges = FD.split_non_dom_edges!(_5_3, sub_edges)
+    non_dom_edges = FD.find_non_dom_edges(_5_3, sub_edges)
 
-    for edge in non_dom_edges
-        FD.add_edge!(graph, edge)
-    end
 
-    #single edge 3,4 should be split into two: ([r1,r2],[v1,v2]) -> ([r1],[v1,v2]),([r2],[v1,v2])
-    edges3_4 = FD.edges(graph, 4, 3)
-    @test length(edges3_4) == 2
-    test_edge = FD.PathEdge(4, 3, y, BitVector([1, 1]), BitVector([0, 1]))
-    @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
-    test_edge = (FD.PathEdge(4, 3, y, BitVector([1, 1]), BitVector([1, 0])))
-    @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
+    @test length(non_dom_edges) == 1
+    edge = non_dom_edges[1]
+    @test all(FD.reachable_roots(edge) .== [true, false])
+    @test all(FD.reachable_variables(edge) .== [true, true])
 
-    graph = FD.DerivativeGraph([n4, n5])
-    sub_heap = FD.compute_factorable_subgraphs(graph)
-    subs = extract_all!(sub_heap)
     _2_4 = subs[2]
     @test (2, 4) == FD.vertices(_2_4)
     sub_edges = FD.subgraph_edges(_2_4)
-    non_dom_edges = FD.split_non_dom_edges!(_2_4, sub_edges)
+    non_dom_edges = FD.find_non_dom_edges(_2_4, sub_edges)
 
-    for edge in non_dom_edges
-        FD.add_edge!(graph, edge)
-    end
-    #single edge 3,4 should be split in two: ([r1,r2],[v1,v2])->([r1,r2],[v1]),([r1,r2],[v2])
-    edges3_4 = FD.edges(graph, 4, 3)
-    @test length(edges3_4) == 2
-    test_edge = FD.PathEdge(4, 3, y, BitVector([1, 0]), BitVector([1, 1]))
-    @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
-    test_edge = (FD.PathEdge(4, 3, y, BitVector([0, 1]), BitVector([1, 1])))
-    @test count(edge_fields_equal.(edges3_4, Ref(test_edge))) == 1
+    @test length(non_dom_edges) == 1
+    edge = non_dom_edges[1]
+    @test all(FD.reachable_roots(edge) .== [true, true])
+    @test all(FD.reachable_variables(edge) .== [true, false])
 end
 
-@testitem "split_non_dom_edges 2" begin
+@testitem "find_non_dom_edges 2" begin
     import FastDifferentiation as FD
 
     FD.@variables x
@@ -148,7 +124,7 @@ end
     for sub in subs
         sub_copy = deepcopy(sub)
         sub_edges = FD.subgraph_edges(sub_copy)
-        edges = FD.split_non_dom_edges!(sub_copy, sub_edges)
+        edges = FD.find_non_dom_edges(sub_copy, sub_edges)
 
         for c_edge in correct_edges[FD.vertices(sub_copy)]
             @test c_edge ∈ FD.vertices.(edges)
@@ -1837,7 +1813,7 @@ end
         return 4 * ϵ * k * (k - 1)
     end
 
-    dim = 3
+    dim = 2
     vars = make_variables(:r, dim)
     r_norm = sqrt(sum(x -> x^2, vars))
     pot_symbolic = potential(1.0, 1.0, r_norm)

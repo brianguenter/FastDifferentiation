@@ -216,7 +216,7 @@ end
 split_non_dom_edges!(subgraph::FactorableSubgraph{T,S})
 
 Splits edges which have roots not in the `dominance_mask` of `subgraph`. Resets the reachability mask of dominated edges and and returns a list of new edges that have reachability mask corresponding to the non-dominant roots or variables."""
-function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) where {T,S<:AbstractFactorableSubgraph}
+function find_non_dom_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {T,S<:AbstractFactorableSubgraph}
     temp_edges = PathEdge{T}[]
 
     for sub_edge in sub_edges
@@ -229,12 +229,10 @@ function split_non_dom_edges!(subgraph::FactorableSubgraph{T,S}, sub_edges) wher
 
                 push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), diff, copy(reachable_roots(sub_edge)))) #create a new edge that accounts for roots not in the     dominance mask    
             end
-
-            edge_mask .= edge_mask .& .!diff #in the original edge reset the roots/variables not in dominance mask
         end
     end
 
-    #split non-dom edges should not have zero reachability
+    #non-dom edges should not have zero reachability
     for edge in temp_edges
         @assert any(reachable_dominance(subgraph, edge))
         @assert any(reachable_non_dominance(subgraph, edge))
