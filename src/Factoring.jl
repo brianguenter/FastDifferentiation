@@ -822,7 +822,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
         parent_branches = parent_edges(graph, a)
         valid_graph = true
 
-        if length(parent_branches) > 1
+        if length(parent_branches) > 1 && !is_constant(node(graph, a)) #don't care how many paths to roots from constant nodes
             duplicate_reachables = zeros(Int64, codomain_dimension(graph))
 
             duplicates!(duplicate_reachables, parent_branches, reachable_roots)
