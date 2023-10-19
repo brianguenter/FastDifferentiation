@@ -811,7 +811,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
 
     function duplicates!(dups, branches, reachable_func)
         for branch in branches
-            dups += reachable_func(branch) #reachable_func(branch) returns a BitVector. In Julia a bit can be added to an Int. If there is a reachable bit set in index i of branch then 1 will be added to dups[i].
+            dups .= dups .+ reachable_func(branch) #reachable_func(branch) returns a BitVector. In Julia a bit can be added to an Int. If there is a reachable bit set in index i of branch then 1 will be added to dups[i].
         end
     end
 
@@ -829,6 +829,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
 
             if any(x -> x > 1, duplicate_reachables)
                 @info "duplicate paths to roots $(findall(x->x>1,duplicate_reachables)) from node $a"
+                valid_graph = false
             end
         end
 
@@ -838,7 +839,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
             non_const_branches = PathEdge[]
 
             for branch in child_branches
-                if is_zero(reachable_variables(branch))
+                if !any(reachable_variables(branch)) #no reachable variables so verify that the child node is a constant.
                     @assert is_constant(node(graph, bott_vertex(branch)))
                 else
                     push!(non_const_branches, branch)
@@ -852,6 +853,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
 
                 if any(x -> x > 1, duplicate_reachables)
                     @info "duplicate paths to variables $(findall(x->x>1,duplicate_reachables)) from node $a"
+                    valid_graph = false
                 end
             end
         end
@@ -873,13 +875,13 @@ end
 """verifies that there is a single path from each root to each variable, if such a path exists."""
 function verify_paths(graph::DerivativeGraph{T}) where {T}
     visited = Dict{T,Bool}()
-
+    good_paths = true
     for root in roots(graph)
         if !_verify_paths(graph, postorder_number(graph, root), visited)
-            return false
+            good_paths = false
         end
     end
-    return true
+    return good_paths
 end
 
 
