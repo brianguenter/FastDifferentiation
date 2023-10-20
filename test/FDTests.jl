@@ -1304,7 +1304,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 10
+    sph_order = 9
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])

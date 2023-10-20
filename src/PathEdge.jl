@@ -101,6 +101,13 @@ function Base.show(io::IO, a::PathEdge)
     print(io, "($(top_vertex(a)) $(bott_vertex(a))  $(num_uses(a)) $(value(a)) $(reachable_roots(a)) $(reachable_variables(a)))")
 end
 
+"""Used for debugging and visualization of graphs"""
+function reachability_string(e::PathEdge)
+    roots = "r[" * join(findall(x -> x == 1, reachable_roots(e)), ",") * "]"
+    variables = "v[" * join(findall(x -> x == 1, reachable_variables(e)), ",") * "]"
+    return roots, variables
+end
+
 mask_roots!(e::PathEdge, mask::BitVector) = e.reachable_roots .= e.reachable_roots .& mask
 mask_variables!(e::PathEdge, mask::BitVector) = e.reachable_variables .= e.reachable_variables .& mask
 

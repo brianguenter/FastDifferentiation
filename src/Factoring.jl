@@ -429,27 +429,6 @@ function is_deletable(vertex_masks, subgraph, edge)
     end
 end
 
-"""Finds edges which can bypass the dominated node"""
-# function find_bypass_edges(subgraph::Factorable)
-# end
-
-"""Resets non dominant edge masks and finds edges which can be deleted. For `PostDominatorSubgraph` resets `reachable_roots`, for `DominatorSubgraph` resets `reachable_variables`. 
-
-If no paths from the `backward_vertex()` of an edge pass through edges that are not in the subgraph then all the bits in the `non_dominance_mask` of the edge can be reset. Otherwise the `non_dominance_mask` bits of the edge are used to mark which non-dominant bit can be reset."""
-function reset_masks_branching!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
-    edges_to_delete = PathEdge[]
-
-    vertex_masks = compute_vertex_masks!(subgraph, sub_edges)
-
-    #use vertex masks to determine which edges can be reset
-    for edge in sub_edges
-        if is_deletable(vertex_masks, subgraph, edge)
-            push!(edges_to_delete, edge)
-        end
-    end
-
-    return edges_to_delete
-end
 
 """Find edges which bypass the non-dominant vertex of a subgraph. These edges must be preserved after factorization"""
 function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
@@ -493,7 +472,8 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
 
     for edge in sub_edges
         back_mask = vertex_masks[backward_vertex(subgraph, edge)]
-        if any(back_mask)
+        feasible_split = back_mask .& reachable_non_dominance(subgraph, edge) #can only split if paths are present in the edge.
+        if any(feasible_split)
             if subgraph isa FactorableSubgraph{T,DominatorSubgraph}
                 bypass = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), copy(back_mask), reachable_dominance(subgraph))
             else
