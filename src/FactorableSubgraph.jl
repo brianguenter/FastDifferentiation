@@ -39,14 +39,10 @@ end
 
 FactorableSubgraph(args::Tuple) = FactorableSubgraph(args...)
 
-dominator_subgraph(args) = dominator_subgraph(args...)
 dominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer} = FactorableSubgraph{T,DominatorSubgraph}(graph, dominating_node, dominated_node, dom_mask, roots_reachable, variables_reachable)
-dominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::S, roots_reachable::S, variables_reachable::S) where {T<:Integer,S<:Vector{Bool}} = dominator_subgraph(graph, dominating_node, dominated_node, BitVector(dom_mask), BitVector(roots_reachable), BitVector(variables_reachable))
 
-
-postdominator_subgraph(args) = postdominator_subgraph(args...)
 postdominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer} = FactorableSubgraph{T,PostDominatorSubgraph}(graph, dominating_node, dominated_node, pdom_mask, roots_reachable, variables_reachable)
-postdominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::S, roots_reachable::S, variables_reachable::S) where {T<:Integer,S<:Vector{Bool}} = postdominator_subgraph(graph, dominating_node, dominated_node, BitVector(pdom_mask), BitVector(roots_reachable), BitVector(variables_reachable))
+
 
 
 graph(a::FactorableSubgraph) = a.graph
@@ -221,13 +217,16 @@ function find_non_dom_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where 
 
     for sub_edge in sub_edges
         edge_mask = reachable_dominance(subgraph, sub_edge)
-        diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
-        if any(diff)
-            if S === DominatorSubgraph
-                push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), copy(reachable_variables(sub_edge)), diff)) #create a new edge that accounts for roots not in the dominance mask
-            else
+        some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
+        if (some_dom_reachable)
+            diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
+            if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the the edge. Split if true.
+                if S === DominatorSubgraph
+                    push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), copy(reachable_variables(sub_edge)), diff)) #create a new edge that accounts for roots not in the dominance mask
+                else
 
-                push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), diff, copy(reachable_roots(sub_edge)))) #create a new edge that accounts for roots not in the     dominance mask    
+                    push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), diff, copy(reachable_roots(sub_edge)))) #create a new edge that accounts for roots not in the     dominance mask    
+                end
             end
         end
     end

@@ -149,7 +149,7 @@ function write_dot(filename, graph::DerivativeGraph; start_nodes::Union{Nothing,
     write_dot(filename, gr)
 end
 
-function write_dot(filename, graph::DerivativeGraph, edges_to_draw::AbstractVector{PathEdge}; start_nodes::Union{Nothing,AbstractVector{Int}}=nothing, graph_label::String="", reachability_labels=true, value_labels=false, no_path_edges=false)
+function write_dot(filename, graph::DerivativeGraph, edges_to_draw::AbstractVector{PathEdge{T}}; start_nodes::Union{Nothing,AbstractVector{Int}}=nothing, graph_label::String="", reachability_labels=true, value_labels=false, no_path_edges=false) where {T}
     gr = make_dot_file(graph, edges_to_draw, graph_label, reachability_labels, value_labels, no_path_edges)
     write_dot(filename, gr)
 end

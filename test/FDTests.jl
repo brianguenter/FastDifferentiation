@@ -240,12 +240,12 @@ end
     sub_heap = FD.compute_factorable_subgraphs(graph)
     subs = extract_all!(sub_heap)
 
-    _5_3 = FD.dominator_subgraph(graph, 5, 3, Bool[0, 1], Bool[0, 1], Bool[1, 1])
-    _1_4 = FD.postdominator_subgraph(graph, 1, 4, Bool[1, 0], Bool[1, 1], Bool[1, 0])
-    _3_5 = FD.postdominator_subgraph(graph, 3, 5, Bool[0, 1], Bool[0, 1], Bool[1, 1])
-    _4_1 = FD.dominator_subgraph(graph, 4, 1, Bool[1, 0], Bool[1, 1], Bool[1, 0])
-    _5_1 = FD.dominator_subgraph(graph, 5, 1, Bool[0, 1], Bool[0, 1], Bool[1, 0])
-    _1_5 = FD.postdominator_subgraph(graph, 1, 5, Bool[1, 0], Bool[0, 1], Bool[1, 0])
+    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
+    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
+    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
+    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
+    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 0)))
+    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)), BitVector((0, 1)), BitVector((1, 0)))
 
     correctly_ordered_subs = (_5_3, _3_5, _1_4, _4_1, _5_1, _1_5) #order of last two could switch and still be correct but all others should be in exactly this order.
 
@@ -1088,15 +1088,15 @@ end
     # FD.factor_subgraph!(graph, FD.postdominator_subgraph(2, 4, 2, BitVector([0, 1]), BitVector([0, 1])))
     subs = FD.compute_factorable_subgraphs(graph)
 
-    _5_3 = FD.dominator_subgraph(graph, 5, 3, Bool[0, 1], Bool[0, 1], Bool[1, 1])
-    _1_4 = FD.postdominator_subgraph(graph, 1, 4, Bool[1, 0], Bool[1, 1], Bool[1, 0])
-    _3_5 = FD.postdominator_subgraph(graph, 3, 5, Bool[0, 1], Bool[0, 1], Bool[1, 1])
-    _4_1 = FD.dominator_subgraph(graph, 4, 1, Bool[1, 0], Bool[1, 1], Bool[1, 0])
-    _5_1 = FD.dominator_subgraph(graph, 5, 1, Bool[0, 1], Bool[0, 1], Bool[1, 0])
+    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
+    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
+    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
+    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
+    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 0)))
 
 
 
-    _1_5 = FD.postdominator_subgraph(graph, 1, 5, Bool[1, 0], Bool[0, 1], Bool[1, 0])
+    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)), BitVector((0, 1)), BitVector((1, 0)))
     sub_edges = FD.subgraph_edges(_5_3)
     sub_eval = FD.evaluate_subgraph(_5_3, sub_edges)
     FD.factor_subgraph!(_5_3)

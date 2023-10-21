@@ -277,7 +277,7 @@ function make_factored_edge(subgraph::FactorableSubgraph{T,DominatorSubgraph}, s
 end
 
 function make_factored_edge(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, sum::Node) where {T}
-    roots_reach = copy(reachable_roots(subgraph))
+    roots_reach = copy(reachable_roots(subgraph)) #wrong
     vars_reach = copy(reachable_dominance(subgraph))
     return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
 end
@@ -525,11 +525,6 @@ function check_continuity(graph, vertex)
                     c_reach_vars = c_reach_vars .| reachable_variables(edge)
                 end
             end
-            # #test
-            # if !bit_equal(p_reach_vars, c_reach_vars)
-            #     @info "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
-            # end
-            # #end test
 
             @assert subset(p_reach_vars, c_reach_vars) "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
         end
@@ -578,6 +573,17 @@ end
 
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
+    function edge_continuity(graph, sub_edges)
+        for edge in sub_edges
+            if node_edges(graph, bott_vertex(edge)) !== nothing
+                check_continuity(graph, bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
+            end
+            if node_edges(graph, top_vertex(edge)) !== nothing
+                check_continuity(graph, top_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
+            end
+        end
+    end
+
 
     sub_edges = subgraph_edges(subgraph)
     local new_edge::PathEdge{T}
@@ -607,16 +613,14 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         end
 
         add_edge!(graph(subgraph), new_edge)
-    end
 
-    #verify continuity at all vertices still remaining from the subgraph. This is wasteful because it potentially checks continuity twice for each vertex in the subgraph.
-    for edge in sub_edges
-        if node_edges(graph(subgraph), bott_vertex(edge)) !== nothing
-            check_continuity(graph(subgraph), bott_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
-        end
-        if node_edges(graph(subgraph), top_vertex(edge)) !== nothing
-            check_continuity(graph(subgraph), top_vertex(edge)) #"factorization of subgraph $(vertices(subgraph)) caused break in reachability continuity"
-        end
+        #verify continuity at all vertices still remaining from the subgraph. This is wasteful because it potentially checks continuity twice for each vertex in the subgraph.
+
+        #TODO remove this and replace with more efficient test below once reachability bugs are fixed
+        edge_continuity(graph(subgraph), unique_edges(graph(subgraph)))
+        #end section to remove
+
+        # edge_continuity(graph(subgraph), vcat(bypass_edges, non_dom_edges)) #only have to check continuity at newly created edges since subedges have been deleted.
     end
 end
 
@@ -734,7 +738,6 @@ function factor!(a::DerivativeGraph{T}) where {T}
     while !isempty(subgraph_list)
 
         subgraph = pop!(subgraph_list)
-
 
         factor_subgraph!(subgraph)
     end
