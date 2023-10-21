@@ -10,40 +10,61 @@ abstract type PostDominatorSubgraph <: AbstractFactorableSubgraph end
 - `graph::DerivativeGraph{T}`
 - `subgraph::Tuple{T,T}`
 - `times_used::T`
-- `reachable_roots::BitVector`
-- `reachable_variables::BitVector`
-- `dom_mask::Union{Nothing,BitVector}`
-- `pdom_mask::Union{Nothing,BitVector}`
+- ` reachable_non_dominance::BitVector`
+- `dominance_mask::BitVector`
 """
 struct FactorableSubgraph{T<:Integer,S<:AbstractFactorableSubgraph}
     graph::DerivativeGraph{T}
     subgraph::Tuple{T,T}
     times_used::T
-    reachable_roots::BitVector
-    reachable_variables::BitVector
-    dom_mask::Union{Nothing,BitVector}
-    pdom_mask::Union{Nothing,BitVector}
+    reachable_non_dominance::BitVector
+    dominance_mask::BitVector
 
-    function FactorableSubgraph{T,DominatorSubgraph}(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer}
+    function FactorableSubgraph{T,DominatorSubgraph}(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::BitVector, non_dom_mask::BitVector) where {T<:Integer}
         @assert dominating_node > dominated_node
 
-        return new{T,DominatorSubgraph}(graph, (dominating_node, dominated_node), sum(dom_mask) * sum(variables_reachable), roots_reachable, variables_reachable, dom_mask, nothing)
+        return new{T,DominatorSubgraph}(graph, (dominating_node, dominated_node), sum(dom_mask) * sum(non_dom_mask), non_dom_mask, dom_mask)
     end
 
-    function FactorableSubgraph{T,PostDominatorSubgraph}(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer}
+    function FactorableSubgraph{T,PostDominatorSubgraph}(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::BitVector, non_dom_mask::BitVector) where {T<:Integer}
         @assert dominating_node < dominated_node
 
-        return new{T,PostDominatorSubgraph}(graph, (dominating_node, dominated_node), sum(roots_reachable) * sum(pdom_mask), roots_reachable, variables_reachable, nothing, pdom_mask)
+        return new{T,PostDominatorSubgraph}(graph, (dominating_node, dominated_node), sum(non_dom_mask) * sum(pdom_mask), non_dom_mask, pdom_mask)
     end
 end
 
 FactorableSubgraph(args::Tuple) = FactorableSubgraph(args...)
 
-dominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer} = FactorableSubgraph{T,DominatorSubgraph}(graph, dominating_node, dominated_node, dom_mask, roots_reachable, variables_reachable)
-
-postdominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::BitVector, roots_reachable::BitVector, variables_reachable::BitVector) where {T<:Integer} = FactorableSubgraph{T,PostDominatorSubgraph}(graph, dominating_node, dominated_node, pdom_mask, roots_reachable, variables_reachable)
 
 
+function dominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, dom_mask::BitVector) where {T}
+    #find reachable_variables
+    pedges = parent_edges(graph, dominated_node)
+    rvars = falses(domain_dimension(graph))
+
+    for edge in pedges
+        if any(dom_mask .& reachable_roots(edge)) #edge belongs to the subgraph
+            rvars .= rvars .| reachable_variables(edge)
+        end
+    end
+
+    return FactorableSubgraph{T,DominatorSubgraph}(graph, dominating_node, dominated_node, dom_mask, rvars)
+end
+
+
+function postdominator_subgraph(graph::DerivativeGraph{T}, dominating_node::T, dominated_node::T, pdom_mask::BitVector) where {T}
+    #find reachable_variables
+    cedges = child_edges(graph, dominated_node)
+    rroots = falses(codomain_dimension(graph))
+
+    for edge in cedges
+        if any(pdom_mask .& reachable_variables(edge)) #edge belongs to the subgraph
+            rroots .= rroots .| reachable_roots(edge)
+        end
+    end
+
+    return FactorableSubgraph{T,PostDominatorSubgraph}(graph, dominating_node, dominated_node, pdom_mask, rroots)
+end
 
 graph(a::FactorableSubgraph) = a.graph
 
@@ -54,13 +75,19 @@ Returns a tuple of ints (dominator vertex,dominated vertex) that are the top and
 vertices(subgraph::FactorableSubgraph) = subgraph.subgraph
 
 
-reachable_variables(a::FactorableSubgraph) = a.reachable_variables
+reachable_variables(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = a.reachable_non_dominance
+reachable_roots(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = a.dominance_mask
+
+reachable_variables(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.dominance_mask
+reachable_roots(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.reachable_non_dominance
+
+
 function mask_variables!(a::FactorableSubgraph, mask::BitVector)
     @assert domain_dimension(graph(a)) == length(mask)
     a.reachable_variables .&= mask
 end
 
-reachable_roots(a::FactorableSubgraph) = a.reachable_roots
+
 function mask_roots!(a::FactorableSubgraph, mask::BitVector)
     @assert codomain_dimension(graph(a)) == length(mask)
     a.reachable_roots .&= mask
@@ -69,8 +96,7 @@ end
 reachable(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = reachable_variables(a)
 reachable(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = reachable_roots(a)
 
-reachable_dominance(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = a.dom_mask
-reachable_dominance(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.pdom_mask
+reachable_dominance(a::FactorableSubgraph) = a.dominance_mask
 
 
 dominating_node(a::FactorableSubgraph{T,S}) where {T,S<:Union{DominatorSubgraph,PostDominatorSubgraph}} = a.subgraph[1]

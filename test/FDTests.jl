@@ -240,12 +240,12 @@ end
     sub_heap = FD.compute_factorable_subgraphs(graph)
     subs = extract_all!(sub_heap)
 
-    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
-    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
-    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
-    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
-    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 0)))
-    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)), BitVector((0, 1)), BitVector((1, 0)))
+    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)))
+    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)))
+    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)))
+    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)))
+    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)))
+    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)))
 
     correctly_ordered_subs = (_5_3, _3_5, _1_4, _4_1, _5_1, _1_5) #order of last two could switch and still be correct but all others should be in exactly this order.
 
@@ -271,20 +271,20 @@ end
     equal_subgraphs(x, y) = FD.dominating_node(x) == FD.dominating_node(y) && FD.dominated_node(x) == FD.dominated_node(y) && FD.times_used(x) == FD.times_used(y) && FD.reachable_dominance(x) == FD.reachable_dominance(y)
 
 
-    index_1_4 = findfirst(x -> equal_subgraphs(x, FD.postdominator_subgraph(dgraph, 1, 4, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
-    index_1_7 = findfirst(x -> equal_subgraphs(x, FD.postdominator_subgraph(dgraph, 1, 7, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
+    index_1_4 = findfirst(x -> equal_subgraphs(x, FD.postdominator_subgraph(dgraph, 1, 4, BitVector([1]))), subs)
+    index_1_7 = findfirst(x -> equal_subgraphs(x, FD.postdominator_subgraph(dgraph, 1, 7, BitVector([1]))), subs)
     @test index_1_4 < index_1_7
 
-    index_8_4 = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 4, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
-    index_8_3 = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 3, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
+    index_8_4 = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 4, BitVector([1]))), subs)
+    index_8_3 = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 3, BitVector([1]))), subs)
     @test index_8_4 < index_8_3
 
-    index_8_1d = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 1, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
+    index_8_1d = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 1, BitVector([1]))), subs)
     @test index_8_4 < index_8_1d
     @test index_8_3 < index_8_1d
     @test index_1_7 < index_8_1d
 
-    index_8_1p = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 1, BitVector([1]), BitVector([1]), BitVector([1]))), subs)
+    index_8_1p = findfirst(x -> equal_subgraphs(x, FD.dominator_subgraph(dgraph, 8, 1, BitVector([1]))), subs)
     @test index_8_4 < index_8_1p
     @test index_8_3 < index_8_1p
     @test index_1_7 < index_8_1p
@@ -852,11 +852,11 @@ end
     gr = FD.DerivativeGraph((cos(x) * cos(x)) + x)
     # Vis.draw_dot(gr)
     # Vis.draw_dot(gr)
-    sub = FD.FactorableSubgraph{Int64,FD.DominatorSubgraph}(gr, 4, 1, BitVector([1]), BitVector([1]), BitVector([1]))
+    sub = FD.dominator_subgraph(gr, 4, 1, BitVector([1]))
 
     edges_4_1 = collect(FD.subgraph_edges(sub))
 
-    sub = FD.FactorableSubgraph{Int64,FD.PostDominatorSubgraph}(gr, 1, 4, BitVector([1]), BitVector([1]), BitVector([1]))
+    sub = FD.postdominator_subgraph(gr, 1, 4, BitVector([1]))
     edges_1_4 = collect(FD.subgraph_edges(sub))
 
     @test count(x -> FD.vertices(x) == (4, 3), edges_4_1) == 1
@@ -933,8 +933,8 @@ end
     subs = extract_all!(sub_heap)
 
     subnums = ((5, 3), (4, 1), (5, 1), (1, 5), (3, 5), (1, 4))
-    rts = (BitVector([1, 0]), BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 1]))
-    vars = (BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 1]), BitVector([1, 0]))
+    rts = (BitVector([1, 0]), BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]))
+    vars = (BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 0]))
 
     subgraphs = [x.subgraph for x in subs]
     #verify subgraphs have proper numbers in them
@@ -1088,15 +1088,12 @@ end
     # FD.factor_subgraph!(graph, FD.postdominator_subgraph(2, 4, 2, BitVector([0, 1]), BitVector([0, 1])))
     subs = FD.compute_factorable_subgraphs(graph)
 
-    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
-    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
-    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 1)))
-    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)), BitVector((1, 1)), BitVector((1, 0)))
-    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)), BitVector((0, 1)), BitVector((1, 0)))
-
-
-
-    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)), BitVector((0, 1)), BitVector((1, 0)))
+    _5_3 = FD.dominator_subgraph(graph, 5, 3, BitVector((0, 1)))
+    _1_4 = FD.postdominator_subgraph(graph, 1, 4, BitVector((1, 0)))
+    _3_5 = FD.postdominator_subgraph(graph, 3, 5, BitVector((0, 1)))
+    _4_1 = FD.dominator_subgraph(graph, 4, 1, BitVector((1, 0)))
+    _5_1 = FD.dominator_subgraph(graph, 5, 1, BitVector((0, 1)))
+    _1_5 = FD.postdominator_subgraph(graph, 1, 5, BitVector((1, 0)))
     sub_edges = FD.subgraph_edges(_5_3)
     sub_eval = FD.evaluate_subgraph(_5_3, sub_edges)
     FD.factor_subgraph!(_5_3)
@@ -1117,7 +1114,7 @@ end
     n5 = n3 * n4
 
     graph = FD.DerivativeGraph([n5, n4])
-    tmp = FD.postdominator_subgraph(graph, 2, 4, BitVector([0, 1]), BitVector([1, 1]), BitVector([0, 1]))
+    tmp = FD.postdominator_subgraph(graph, 2, 4, BitVector([0, 1]))
     FD.factor_subgraph!(tmp)
     @test length(FD.edges(graph, 2, 4)) == 1
 
@@ -1132,7 +1129,7 @@ end
 
     _, graph, _, _ = FDTests.simple_dominator_graph()
 
-    sub = FD.postdominator_subgraph(graph, 1, 3, BitVector([1]), BitVector([1]), BitVector([1]))
+    sub = FD.postdominator_subgraph(graph, 1, 3, BitVector([1]))
 end
 
 @testitem "factor simple ℝ²->ℝ²" begin
