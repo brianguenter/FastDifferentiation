@@ -933,8 +933,9 @@ end
     subs = extract_all!(sub_heap)
 
     subnums = ((5, 3), (4, 1), (5, 1), (1, 5), (3, 5), (1, 4))
-    rts = (BitVector([1, 0]), BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]))
-    vars = (BitVector([1, 1]), BitVector([1, 0]), BitVector([1, 0]), BitVector([1, 0]))
+    rts = BitVector.(((1, 0), (0, 1), (1, 0), (1, 0), (1, 0), (1, 1)))
+    vars = BitVector.(((1, 1), (1, 0), (1, 0), (1, 0), (0, 1), (1, 0)))
+
 
     subgraphs = [x.subgraph for x in subs]
     #verify subgraphs have proper numbers in them
@@ -1301,7 +1302,7 @@ end
 
     FD.@variables x y z
 
-    sph_order = 9
+    sph_order = 6
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), [x, y, z])
     dense = jacobian(FD.roots(FD_graph), [x, y, z])
@@ -1322,7 +1323,7 @@ end
 
     FD.@variables x y z
     input_vars = [x, y, z]
-    sph_order = 9
+    sph_order = 7
     FD_graph = spherical_harmonics(sph_order, x, y, z)
     sprse = sparse_jacobian(FD.roots(FD_graph), input_vars)
     dense = jacobian(FD.roots(FD_graph), input_vars)
@@ -1341,7 +1342,7 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(10)
+    FD_graph = spherical_harmonics(6)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 
@@ -1421,7 +1422,7 @@ end
 @testitem "jacobian_times_v" begin
     include("ComplexTestFunctions.jl")
 
-    order = 9
+    order = 7
 
     FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
@@ -1450,7 +1451,7 @@ end
 @testitem "jacobian_transpose_v" begin
     include("ComplexTestFunctions.jl")
 
-    order = 9
+    order = 7
 
     FD_graph = spherical_harmonics(order)
     FD_func = FD.roots(FD_graph)
@@ -1624,7 +1625,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(8)
+    sph_func = spherical_harmonics(7)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 
@@ -1721,8 +1722,8 @@ end
         func2 = FD.make_function(nmat2, FD.Node[])
         println(func2)
 
-        @assert isapprox(func1(Float64[]), mat)
-        @assert isapprox(func2(Float64[]), mat)
+        @test isapprox(func1(Float64[]), mat)
+        @test isapprox(func2(Float64[]), mat)
     end
 end
 

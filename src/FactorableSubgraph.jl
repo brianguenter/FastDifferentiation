@@ -81,6 +81,10 @@ reachable_roots(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = a.domina
 reachable_variables(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.dominance_mask
 reachable_roots(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.reachable_non_dominance
 
+reachable_non_dominance(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = a.reachable_non_dominance
+reachable_non_dominance(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = a.reachable_non_dominance
+
+reachable_dominance(a::FactorableSubgraph) = a.dominance_mask
 
 function mask_variables!(a::FactorableSubgraph, mask::BitVector)
     @assert domain_dimension(graph(a)) == length(mask)
@@ -93,10 +97,7 @@ function mask_roots!(a::FactorableSubgraph, mask::BitVector)
     a.reachable_roots .&= mask
 end
 
-reachable(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = reachable_variables(a)
-reachable(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = reachable_roots(a)
 
-reachable_dominance(a::FactorableSubgraph) = a.dominance_mask
 
 
 dominating_node(a::FactorableSubgraph{T,S}) where {T,S<:Union{DominatorSubgraph,PostDominatorSubgraph}} = a.subgraph[1]
@@ -163,11 +164,11 @@ backward_edges(a::FactorableSubgraph, edge::PathEdge) = backward_edges(a, backwa
 # test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
 
 """Note: this is legal: `reachable_variables(a) ⊄ reachable_variables(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
-test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_variables(a), reachable_variables(edge))
+test_edge(a::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = overlap(reachable_dominance(a), reachable_roots(edge)) && overlap(reachable_non_dominance(a), reachable_variables(edge))
 """returns true if `edge` is on a valid path from the `dominated_node(a)` to the `dominating_node(a)`, i.e., the edge is in the subgraph.
 
 Note: this is legal: `reachable_roots(a) ⊄ reachable_roots(edge)`. This is counterintuitive because it appears to imply that there are paths through the subgraph that are not allowed by the edge. This is not the case. The missing paths have been accounted for in a previous factorization."""
-test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = subset(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_roots(a), reachable_roots(edge))
+test_edge(a::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = overlap(reachable_dominance(a), reachable_variables(edge)) && overlap(reachable_non_dominance(a), reachable_roots(edge))
 
 
 reachable_dominance(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
@@ -178,8 +179,7 @@ reachable_non_dominance(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::Pat
 non_dominance_mask(::FactorableSubgraph{T,DominatorSubgraph}, edge::PathEdge) where {T} = reachable_variables(edge)
 non_dominance_mask(::FactorableSubgraph{T,PostDominatorSubgraph}, edge::PathEdge) where {T} = reachable_roots(edge)
 
-non_dominance_mask(a::FactorableSubgraph{T,DominatorSubgraph}) where {T} = reachable_variables(a)
-non_dominance_mask(a::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = reachable_roots(a)
+
 
 non_dominance_dimension(subgraph::FactorableSubgraph{T,DominatorSubgraph}) where {T} = domain_dimension(graph(subgraph))
 non_dominance_dimension(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}) where {T} = codomain_dimension(graph(subgraph))

@@ -488,88 +488,52 @@ end
 
 
 
-"""ensures that no paths are discontinous, e.g, the child edges of a node have reachable_roots that are not reachable fromt the parent edges. O(n^2) so only use for debugging, not release code."""
+
+"""Computes a boolean path matrix `pm` for edges above and below the vertex. `pm[i,j]` = true means there is a path from variable `i` to variable `j`, false means there is no path. This is `O(mn)` where `m` is the nubmer of variables and `n` the nubmer of roots. Only use for debugging and testing"""
 function check_continuity(graph, vertex)
+    function path_matrix(graph, edge_list)
+        paths = falses(domain_dimension(graph), codomain_dimension(graph))
+
+        for edge in edge_list
+            rts = copy(reachable_roots(edge))
+            rt_indices = findall(rts)
+
+            vars = copy(reachable_variables(edge))
+            var_indices = findall(vars)
+
+            for rt_index in rt_indices
+                for var_index in var_indices
+                    paths[var_index, rt_index] = true
+                end
+            end
+        end
+        return paths
+    end
+
     pedges = parent_edges(graph, vertex)
-    cedges = child_edges(graph, vertex)
+    if length(pedges) != 0
+        paths_above = path_matrix(graph, pedges)
+        cedges = child_edges(graph, vertex)
+        if length(cedges) != 0
+            paths_below = path_matrix(graph, cedges)
 
-    if length(pedges) > 0 && length(cedges) > 0
-        #find roots in parent edges and make sure all variable paths for these roots are present in the child edges
-        all_roots = falses(codomain_dimension(graph))
-        for edge in pedges
-            all_roots .= all_roots .| reachable_roots(edge)
-        end
+            skip_row = -1
+            skip_column = -1
 
-
-        root_indices = findall(all_roots)
-        p_reach_vars = falses(domain_dimension(graph))
-        c_reach_vars = falses(domain_dimension(graph))
-
-        for root_index in root_indices
-            p_reach_vars .= false
-            c_reach_vars .= false
-
-            variable_mask = trues(domain_dimension(graph))
-            if is_variable(graph, vertex)
-                variable_mask[variable_postorder_to_index(graph, vertex)] = 0
-            end
-
-            for edge in pedges
-                if reachable_roots(edge)[root_index]
-                    p_reach_vars .= p_reach_vars .| (reachable_variables(edge) .& variable_mask)
-                end
-            end
-
-            for edge in cedges
-                if reachable_roots(edge)[root_index]
-                    c_reach_vars = c_reach_vars .| reachable_variables(edge)
-                end
-            end
-
-            @assert subset(p_reach_vars, c_reach_vars) "Parent and child reachable variables for root index $root_index and vertex $vertex did not match. Parent reachable $p_reach_vars child reachable $c_reach_vars"
-        end
-
-        #find roots in parent edges and make sure all variable paths for these roots are present in the child edges
-        all_variables = falses(domain_dimension(graph))
-        for edge in cedges
-            all_variables .= all_variables .| reachable_variables(edge)
-        end
-
-        variable_indices = findall(all_variables)
-        p_reach_roots = falses(codomain_dimension(graph))
-        c_reach_roots = falses(codomain_dimension(graph))
-
-        for variable_index in variable_indices
-            p_reach_roots .= false
-            c_reach_roots .= false
-
-            root_mask = trues(codomain_dimension(graph))
             if is_root(graph, vertex)
-                root_mask[root_postorder_to_index(graph, vertex)] = 0 #vertex is a root so parent edges will not have it in their reachable roots masks. Clear the bit so don't get erroneous continuity errors.
+                skip_col = root_postorder_to_index(graph, vertex)
+                paths_below[:, skip_col] .= false
             end
 
-            for edge in cedges
-                if reachable_variables(edge)[variable_index]
-                    c_reach_roots .= c_reach_roots .| (reachable_roots(edge) .& root_mask)
-                end
+            if is_variable(graph, vertex)
+                skip_row = variable_postorder_to_index(graph, vertex)
+                paths_above[skip_row, :] .= false
             end
 
-            for edge in pedges
-                if reachable_variables(edge)[variable_index]
-                    p_reach_roots .= p_reach_roots .| reachable_roots(edge)
-                end
-            end
-            # #test
-            # if !bit_equal(p_reach_roots, c_reach_roots)
-            #     @info "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
-            # end
-            # #end test
-
-            @assert subset(p_reach_roots, c_reach_roots) "Parent and child reachable roots for variable index $variable_index and vertex $vertex did not match. Parent reachable $p_reach_roots child reachable $c_reach_roots"
+            @assert all(paths_above .== paths_below) "Discountinuity in reachability for vertex $vertex. paths_above = $paths_above  paths_below = $paths_below"
         end
     end
 end
-
 
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
@@ -616,9 +580,9 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
 
         #verify continuity at all vertices still remaining from the subgraph. This is wasteful because it potentially checks continuity twice for each vertex in the subgraph.
 
-        #TODO remove this and replace with more efficient test below once reachability bugs are fixed
-        edge_continuity(graph(subgraph), unique_edges(graph(subgraph)))
-        #end section to remove
+        # #TODO remove this and replace with more efficient test below once reachability bugs are fixed
+        # edge_continuity(graph(subgraph), unique_edges(graph(subgraph)))
+        # #end section to remove
 
         # edge_continuity(graph(subgraph), vcat(bypass_edges, non_dom_edges)) #only have to check continuity at newly created edges since subedges have been deleted.
     end

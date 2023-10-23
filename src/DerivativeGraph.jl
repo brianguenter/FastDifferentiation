@@ -315,7 +315,7 @@ end
 
 edges(a::DerivativeGraph, verts::Tuple{Integer,Integer}) = edges(a, verts[1], verts[2])
 
-function exact_match(edge::PathEdge, edge_vector::Vector{PathEdge})
+function exact_match(edge::PathEdge{T}, edge_vector::Vector{PathEdge{T}}) where {T}
     exact_match = false
     for pedge in edge_vector
         if pedge === edge
@@ -329,8 +329,8 @@ end
     unique_edges(a::DerivativeGraph)
 
 This is not an especially fast function. Currently only used for testing and diagnostics so this isn't a problem. Tests for uniques by ObjectId, not by structural equality."""
-function unique_edges(a::DerivativeGraph)
-    edges_unique = PathEdge[]
+function unique_edges(a::DerivativeGraph{T}) where {T}
+    edges_unique = PathEdge{T}[]
     for edge_vector in values(edges(a))
         for edge in parents(edge_vector)
             if !exact_match(edge, edges_unique)
