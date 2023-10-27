@@ -202,7 +202,7 @@ function next_valid_edge(a::FactorableSubgraph, current_edge::PathEdge{T}) where
         for edge in forward_edges(a, current_edge) #should always be a next edge because top_vertex(current_edge) != dominance_node(a)
             if test_edge(a, edge)
                 count += 1
-                # @assert count ≤ 1 #in a properly processed subgraph there should not be branches on paths from dominated to dominating node.
+
                 if count > 1
                     return nothing
                 end
@@ -246,7 +246,7 @@ function find_non_dom_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where 
         some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
         if (some_dom_reachable)
             diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
-            if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the the edge. Split if true.
+            if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the edge. Split if true.
                 if S === DominatorSubgraph
                     push!(temp_edges, PathEdge(top_vertex(sub_edge), bott_vertex(sub_edge), value(sub_edge), copy(reachable_variables(sub_edge)), diff)) #create a new edge that accounts for roots not in the dominance mask
                 else
@@ -259,8 +259,8 @@ function find_non_dom_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where 
 
     #non-dom edges should not have zero reachability
     for edge in temp_edges
-        @assert any(reachable_dominance(subgraph, edge))
-        @assert any(reachable_non_dominance(subgraph, edge))
+        @assert any(reachable_dominance(subgraph, edge)) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+        @assert any(reachable_non_dominance(subgraph, edge)) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
     end
 
     return temp_edges
@@ -278,6 +278,83 @@ function check_edges(subgraph::FactorableSubgraph{T,S}, edge_list::Vector{PathEd
     return count
 end
 
+
+"""verifies that every edge in `subgraph_edges(subgraph)` is on a path from `dominating_node(subgraph)` to `dominated_node(subgraph)`. This is done by testing for the following properties:
+
+for e ∈ subgraph_edges(subgraph)
+    either forward_vertex(e) has children or it is equal to `dominated_node`
+    either backward_vertex(e) has parents or it is equal to `dominating_node`
+end
+"""
+function verify_subgraph_paths(subgraph::FactorableSubgraph{T}, subedges) where {T}
+    backward_vertices = Dict{T,Set{T}}()
+
+    for edge in subedges
+        back = backward_vertex(subgraph, edge)
+        fwd = forward_vertex(subgraph, edge)
+        chld_verts = get(backward_vertices, fwd, nothing)
+        if chld_verts === nothing
+            backward_vertices[fwd] = Set{T}()
+        end
+        push!(backward_vertices[fwd], back)
+
+    end
+
+    @assert get(backward_vertices, dominated_node(subgraph), nothing) === nothing "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+
+    backward_vertices[dominated_node(subgraph)] = Set{T}() #dominated node has no forward vertices
+
+    for prnt in keys(backward_vertices)
+        back_verts = backward_vertices[prnt]
+        for backward in back_verts
+            back_back_verts = get(backward_vertices, backward, nothing)
+            @assert back_back_verts !== nothing "a child vertex wasn't found. This is a bug. Please create an issue on the FastDifferentiation.jl repo. \n\n Debug info: subgraph vertices $(vertices(subgraph)) subedges $(vertices.(subedges)) backward_vertices $backward_vertices. "
+
+            if length(back_back_verts) == 0
+                @assert backward == dominated_node(subgraph)
+            end
+        end
+    end
+
+    forward_vertices = Dict{T,Set{T}}()
+
+    for edge in subedges
+        back = backward_vertex(subgraph, edge)
+        fwd = forward_vertex(subgraph, edge)
+        chld_verts = get(forward_vertices, back, nothing)
+        if chld_verts === nothing
+            forward_vertices[back] = Set{T}()
+        end
+        push!(forward_vertices[back], fwd)
+
+    end
+
+    @assert get(forward_vertices, dominating_node(subgraph), nothing) === nothing "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+
+    forward_vertices[dominating_node(subgraph)] = Set{T}() #dominated node has no forward vertices
+
+    for prnt in keys(forward_vertices)
+        fwd_verts = forward_vertices[prnt]
+        for backward in fwd_verts
+            fwd_fwd_verts = get(forward_vertices, backward, nothing)
+            @assert fwd_fwd_verts !== nothing "a child vertex wasn't found. This is a bug. Please create an issue on the FastDifferentiation.jl repo. \n\n Debug info: subgraph vertices $(vertices(subgraph)) subedges $(vertices.(subedges)) forward_vertices $forward_vertices."
+
+            if length(fwd_fwd_verts) == 0
+                @assert backward == dominating_node(subgraph)
+            end
+        end
+    end
+
+end
+
+"""Finds all edges in subgraph."""
+function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgraph{T}) where {T}
+    tmp = subgraph_edges!(sub_edges, subgraph, Set{PathEdge{T}}(), dominated_node(subgraph))
+    @assert tmp
+    verify_subgraph_paths(subgraph, sub_edges)
+    return tmp
+end
+
 """
     subgraph_edges(
         subgraph::FactorableSubgraph{T},
@@ -287,29 +364,24 @@ end
     )
 
 Returns all edges in the subgraph as a set. Recursively traverses the subgraph so will work even for subgraphs with branching paths."""
-function subgraph_edges(subgraph::FactorableSubgraph{T}, sub_edges::Union{Nothing,Set{PathEdge{T}}}=nothing, visited::Union{Nothing,Set{PathEdge{T}}}=nothing, curr_node::Union{Nothing,T}=nothing) where {T}
-    if sub_edges === nothing
-        sub_edges = Set{PathEdge{T}}()
-    end
-
-    if visited === nothing
-        visited = Set{PathEdge{T}}()
-    end
-
-    if curr_node === nothing
-        curr_node = dominated_node(subgraph)
-    end
+function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgraph{T}, visited::Set{PathEdge{T}}, curr_node::T) where {T}
+    path_forward = true
 
     for fedge in forward_edges(subgraph, curr_node)
-        if test_edge(subgraph, fedge) && !in(fedge, visited)
-            push!(sub_edges, fedge)
-            fvert = forward_vertex(subgraph, fedge)
-            if fvert != dominating_node(subgraph)
-                subgraph_edges(subgraph, sub_edges, visited, fvert)
+        if !in(fedge, visited) #already verified this path
+            push!(visited, fedge)
+            if test_edge(subgraph, fedge) #there is a valid path forward
+                push!(sub_edges, fedge)
+                fvert = forward_vertex(subgraph, fedge)
+                if fvert != dominating_node(subgraph)
+                    path_forward = path_forward && subgraph_edges!(sub_edges, subgraph, visited, fvert)
+                end
+            elseif curr_node != dominating_vertex(subgraph) #no path forward so curr_node should be the dominating vertex. If it isn't then at least one of the paths in the subgraph is broken.
+                path_forward = false
             end
         end
     end
-    return sub_edges
+    return path_forward
 end
 
 
@@ -317,8 +389,9 @@ end
     deconstruct_subgraph(subgraph::FactorableSubgraph)
 
 Returns subgraph edges, as a `Set`, and nodes, as a `Vector`."""
-function deconstruct_subgraph(subgraph::FactorableSubgraph)
-    sub_edges = subgraph_edges(subgraph)
+function deconstruct_subgraph(subgraph::FactorableSubgraph{T}) where {T}
+    @assert subgraph_exists(subgraph)
+    @assert subgraph_edges(subgraph, sub_edges)
     sub_nodes = map(x -> backward_vertex(subgraph, x), collect(sub_edges))
     push!(sub_nodes, dominating_node(subgraph)) #dominating node will not be the backward vertex of any edge
     return sub_edges, unique(sub_nodes)
@@ -371,12 +444,12 @@ struct PathIterator{T<:Integer,S<:FactorableSubgraph}
     start_edge::PathEdge{T}
 
     function PathIterator(subgraph::S, start_edge::PathEdge{T}) where {T,S<:FactorableSubgraph{T,DominatorSubgraph}}
-        @assert bott_vertex(start_edge) == dominated_node(subgraph)
+        @assert bott_vertex(start_edge) == dominated_node(subgraph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         return new{T,S}(subgraph, start_edge)
     end
 
     function PathIterator(subgraph::S, start_edge::PathEdge{T}) where {T,S<:FactorableSubgraph{T,PostDominatorSubgraph}}
-        @assert top_vertex(start_edge) == dominated_node(subgraph)
+        @assert top_vertex(start_edge) == dominated_node(subgraph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         return new{T,S}(subgraph, start_edge)
     end
 end

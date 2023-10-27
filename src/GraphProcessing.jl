@@ -193,7 +193,7 @@ end
 
 
 function _compute_paths!(path_masks, graph_edges::Dict{T,EdgeRelations{T}}, current_node_index, origin_index, relation_function) where {T}
-    @assert current_node_index <= length(path_masks)
+    @assert current_node_index <= length(path_masks) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
     if path_masks[current_node_index][origin_index] == 1
         return #already visited this node so don't recurse.
     else
@@ -213,7 +213,7 @@ function compute_paths(num_nodes::T, graph_edges::Dict{T,EdgeRelations{T}}, orig
     path_masks = [falses(length(origin_nodes)) for _ in 1:num_nodes]
 
     for ((origin_index, postorder_num)) in pairs(origin_nodes)
-        @assert postorder_num <= num_nodes
+        @assert postorder_num <= num_nodes "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         _compute_paths!(path_masks, graph_edges, postorder_num, origin_index, relation_function)
     end
 
@@ -251,7 +251,7 @@ function intersection(order_test, node1::T, node2::T, idoms::Dict{T,T}, start_in
     max_count = length(idoms)
     while true
         #added this assertion because several simple errors in other code made this code loop forever. Hard to track the error down without a thrown exception.
-        @assert count <= max_count "intersection has taken more steps than necessary. This should never happen."
+        @assert count <= max_count "intersection has taken more steps than necessary. This should never happen. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
 
         if node1 == node2
             return node1
@@ -278,12 +278,12 @@ function fill_idom_table!(next_vertices::Union{Nothing,AbstractVector{T}}, dom_t
         dom_table[current_node] = next_vertices[1]
     else
         br1 = next_vertices[1]
-        @assert order_test(br1, start_index) || br1 == start_index "br1 ($br1) > start_index ($start_index). Violated assertion before intersection."
+        @assert order_test(br1, start_index) || br1 == start_index "br1 ($br1) > start_index ($start_index). Violated assertion before intersection. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
 
         for relation_vertex in view(next_vertices, 2:length(next_vertices))
             br1 = intersection(order_test, br1, relation_vertex, dom_table, start_index)
         end
-        @assert order_test(br1, start_index) || br1 == start_index "br1 violated assertion after intersection."
+        @assert order_test(br1, start_index) || br1 == start_index "br1 violated assertion after intersection. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         dom_table[current_node] = br1
     end
 end

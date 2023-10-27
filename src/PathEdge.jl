@@ -46,7 +46,6 @@ struct PathEdge{T<:Integer,N,M}
         N = length(reachable_variables)
         M = length(reachable_roots)
         v1, v2 = verify_invariants(v1, v2)
-        # @assert value(expression) != 0 "The value of the expression argument to the PathEdge constructor was 0. This is not a legal value."
 
         return new{T,N,M}(v1, v2, expression, reachable_variables, reachable_roots, uuid1())
     end

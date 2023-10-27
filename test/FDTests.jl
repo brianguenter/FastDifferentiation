@@ -85,7 +85,8 @@ end
     subs = extract_all!(subs_heap)
     _5_3 = subs[1]
     @test (5, 3) == FD.vertices(_5_3)
-    sub_edges = FD.subgraph_edges(_5_3)
+    sub_edges = Set{FD.PathEdge{Int64}}()
+    @test FD.subgraph_edges(_5_3, sub_edges)
     non_dom_edges = FD.find_non_dom_edges(_5_3, sub_edges)
 
 
@@ -1058,7 +1059,8 @@ end
     subs = extract_all!(sub_heap)
 
     _5_3 = filter(x -> FD.vertices(x) == (5, 3), subs)[1]
-    sub_edges = FD.subgraph_edges(_5_3)
+    sub_edges = Set{PathEdge{T}}()
+    @test FD.subgraph_edges!(_5_3, sub_edges)
     e_5_3 = FD.make_factored_edge(_5_3, FD.evaluate_subgraph(_5_3, sub_edges))
 
     _3_5 = filter(x -> FD.vertices(x) == (3, 5), subs)[1]
@@ -1342,7 +1344,7 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(6)
+    FD_graph = spherical_harmonics(7)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 
@@ -1625,7 +1627,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(7)
+    sph_func = spherical_harmonics(6)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 

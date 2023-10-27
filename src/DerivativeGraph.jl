@@ -501,14 +501,14 @@ function _partial_edges(postorder_number::IdDict{Node,Int64}, visited::IdDict{No
                 edges[current_index] = EdgeRelations()
             end
 
-            @assert !in(edge, edges[current_index].children) #should never be possible to add an edge that is already there but make sure this won't happen.
+            @assert !in(edge, edges[current_index].children) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #should never be possible to add an edge that is already there but make sure this won't happen.
             push!(edges[current_index].children, edge)
 
 
             if get(edges, child_index, nothing) === nothing
                 edges[child_index] = EdgeRelations()
             end
-            @assert !in(edge, edges[child_index].parents) #should never be possible to add an edge that is already there but make sure this won't happen.
+            @assert !in(edge, edges[child_index].parents) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #should never be possible to add an edge that is already there but make sure this won't happen.
             push!(edges[child_index].parents, edge)
 
 
@@ -617,7 +617,7 @@ function delete_edge!(graph::DerivativeGraph, edge::PathEdge, force::Bool=false)
     c_and_p_edges = all_edges[bott_vertex(edge)]
     prnts = parents(c_and_p_edges)
     matching_index = findall(x -> x === edge, prnts)
-    @assert length(matching_index) == 1 "Should have found one matching edge but didn't find any or found more than one. This should never happen."
+    @assert length(matching_index) == 1 "Should have found one matching edge but didn't find any or found more than one. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
     deleteat!(prnts, matching_index)
     if length(prnts) == 0 && length(children(c_and_p_edges)) == 0
         delete!(all_edges, bott_vertex(edge)) #remove the vertex from all_edges since nothing connects to it anymore
@@ -628,7 +628,7 @@ function delete_edge!(graph::DerivativeGraph, edge::PathEdge, force::Bool=false)
     c_and_p_edges = all_edges[top_vertex(edge)]
     chldrn = children(c_and_p_edges)
     matching_index = findall(x -> x === edge, chldrn)
-    @assert length(matching_index) == 1 "Should have found one matching edge but didn't find any or found more than one. This should never happen."
+    @assert length(matching_index) == 1 "Should have found one matching edge but didn't find any or found more than one. This should never happen. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
     deleteat!(chldrn, matching_index)
     if length(chldrn) == 0 && length(parents(c_and_p_edges)) == 0
         delete!(all_edges, top_vertex(edge)) #remove the vertex from all_edges since nothing connects to it anymore

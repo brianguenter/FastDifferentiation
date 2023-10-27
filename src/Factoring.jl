@@ -374,7 +374,7 @@ function is_reachable(subgraph, edge)
     any(reachable_dominance(subgraph, edge)) && any(reachable_non_dominance(subgraph, edge))
 end
 
-function compute_vertex_masks!(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
+function compute_vertex_masks(subgraph::FactorableSubgraph{T}, sub_edges) where {T<:Integer}
     edge_list = collect(sub_edges)
 
     sort_edge_list!(subgraph, edge_list) #sorts edges by postorder for DominatorSubgraph and reverse postorder for PostDominatorSubgraph.
@@ -412,23 +412,6 @@ function compute_vertex_masks!(subgraph::FactorableSubgraph{T}, sub_edges) where
     end
     return vertex_masks
 end
-
-"""If edge can be deleted returns true. If not then it resets the bit mask of edge and returns false"""
-function is_deletable(vertex_masks, subgraph, edge)
-    vert = backward_vertex(subgraph, edge)
-    vert_mask = vertex_masks[vert]
-
-    if any(vert_mask .& reachable_non_dominance(subgraph, edge)) #edge bypasses the dominated node so keep edge but set non-dominant bits to just those that bypass the dominated node
-        tmp = reachable_non_dominance(subgraph, edge)
-        tmp .= vert_mask .& tmp #set the bypass mask
-        return false
-    else #edge does not bypass the dominated node so delete it
-        tmp = reachable_non_dominance(subgraph, edge)
-        tmp .= falses(length(tmp)) #need to reset roots or variables otherwise edge deletion assertion will fail.
-        return true
-    end
-end
-
 
 """Find edges which bypass the non-dominant vertex of a subgraph. These edges must be preserved after factorization"""
 function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
@@ -530,10 +513,21 @@ function check_continuity(graph, vertex)
                 paths_above[skip_row, :] .= false
             end
 
-            @assert all(paths_above .== paths_below) "Discountinuity in reachability for vertex $vertex. paths_above = $paths_above  paths_below = $paths_below"
+            @assert all(paths_above .== paths_below) "Discountinuity in reachability for vertex $vertex. paths_above = $paths_above  paths_below = $paths_below. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         end
     end
 end
+
+"""`find_bypass_edges` and `fin_non_dom_edges` can create redundant edges which don't need to be split. If an edge is present in both lists then merge so don't get redundant edges in tht graph"""
+# function merge_redundant_edges(nondom,bypass) where{S<:PathEdge}
+#     merged = S[]
+
+#    for nd in nondom
+#     for by in bypass
+#         if vertices(nd) == vertices(by)
+#             if reachable_roots(nd) == reachable_roots(by)
+
+# end
 
 """reset root and variable masks for edges in the graph and add a new edge connecting `dominating_node(subgraph)` and `dominated_node(subgraph)` to the graph that has the factored value of the subgraph"""
 function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
@@ -548,8 +542,10 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         end
     end
 
+    sub_edges = Set{PathEdge{T}}()
 
-    sub_edges = subgraph_edges(subgraph)
+    @assert subgraph_edges(subgraph, sub_edges)
+
     local new_edge::PathEdge{T}
     if subgraph_exists(subgraph, sub_edges)
 
@@ -557,7 +553,7 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         sum = evaluate_subgraph(subgraph, sub_edges)
 
         new_edge = make_factored_edge(subgraph, sum)
-        @assert is_reachable(subgraph, new_edge)
+        @assert is_reachable(subgraph, new_edge) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
 
         non_dom_edges = find_non_dom_edges(subgraph, sub_edges)
 
@@ -626,22 +622,6 @@ function vertex_counts(subgraph::FactorableSubgraph{T}) where {T}
     return counts
 end
 
-# function evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}) where {T}
-#     sub_edges, sub_nodes = deconstruct_subgraph(subgraph)
-#     counts = vertex_counts(subgraph)
-#     for nde in sub_nodes
-#         @assert counts[nde] !== nothing
-#     end
-
-#     counts[dominated_node(subgraph)] = 1
-#     vertex_sums = Dict{T,Node}()
-#     # Vis.draw_dot(subgraph)
-#     edge_list = collect(sub_edges)
-#     sort_edge_list!(subgraph, edge_list)
-#     _evaluate_branching_subgraph(subgraph, Node(1), dominated_node(subgraph), edge_list, counts, vertex_sums)
-
-#     return vertex_sums[dominating_node(subgraph)]
-# end
 
 function evaluate_subgraph(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
     vertex_sums = Dict{T,Node}()
@@ -658,35 +638,10 @@ function evaluate_subgraph(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
         end
     end
 
-    @assert get(vertex_sums, dominating_node(subgraph), nothing) !== nothing "evaluate_branching_subgraph: vertex sum for dominating node did not exist"
+    @assert get(vertex_sums, dominating_node(subgraph), nothing) !== nothing "evaluate_branching_subgraph: vertex sum for dominating node did not exist. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
 
     return vertex_sums[dominating_node(subgraph)]
 end
-
-
-# function _evaluate_branching_subgraph(subgraph::FactorableSubgraph{T}, sum::Node, current_vertex::T, sub_edges, counts::Dict{T,T}, vertex_sums::Dict{T,Node}) where {T}
-#     if get(vertex_sums, current_vertex, nothing) === nothing
-#         vertex_sums[current_vertex] = sum
-#     else
-#         vertex_sums[current_vertex] += sum
-#     end
-
-#     @assert get(counts, current_vertex, nothing) !== nothing " in _evaluate_branching_subgraph: counts[current_vertex] === nothing. This should never happen $counts $current_vertex"
-
-#     counts[current_vertex] -= 1
-#     if counts[current_vertex] == 0
-#         for edge in predecessor_edges(subgraph, current_vertex)
-#             if !in(edge, sub_edges)
-#                 # @assert false "$(vertices(edge)) $(vertices.(sub_edges))"
-#                 continue
-#             else
-#                 _evaluate_branching_subgraph(subgraph, vertex_sums[current_vertex] * value(edge), forward_vertex(subgraph, edge), sub_edges, counts, vertex_sums)
-#             end
-#         end
-#     end
-# end
-
-### End of functions for evaluating subgraphs with branches.
 
 
 function print_edges(a, msg)
@@ -754,61 +709,96 @@ end
 
 
 """Verifies that there is a single path from each root to each variable, if a path exists. This should be an invariant of the factored graph so it should always be true. But the algorithm is complex enough that it is easy to accidentally introduce errors when adding features. `verify_paths` has negligible runtime cost compared to factorization."""
-function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) where {T}
+# function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) where {T}
 
-    function duplicates!(dups, branches, reachable_func)
-        for branch in branches
-            dups .= dups .+ reachable_func(branch) #reachable_func(branch) returns a BitVector. In Julia a bit can be added to an Int. If there is a reachable bit set in index i of branch then 1 will be added to dups[i].
-        end
-    end
+#     function duplicates!(dups, branches, reachable_func)
+#         for branch in branches
+#             dups .= dups .+ reachable_func(branch) #reachable_func(branch) returns a BitVector. In Julia a bit can be added to an Int. If there is a reachable bit set in index i of branch then 1 will be added to dups[i].
+#         end
+#     end
 
+#     if get(visited, a, nothing) !== nothing #don't reprocess vertices that have already been visited.
+#         return visited[a]
+#     else
+#         child_branches = child_edges(graph, a)
+#         parent_branches = parent_edges(graph, a)
+#         valid_graph = true
+
+#         if length(parent_branches) > 1 && !is_constant(node(graph, a)) #don't care how many paths to roots from constant nodes
+#             duplicate_reachables = zeros(Int64, codomain_dimension(graph))
+
+#             duplicates!(duplicate_reachables, parent_branches, reachable_roots)
+
+#             if any(x -> x > 1, duplicate_reachables)
+#                 @info "duplicate paths to roots $(findall(x->x>1,duplicate_reachables)) from node $a"
+#                 valid_graph = false
+#             end
+#         end
+
+
+#         if length(child_branches) > 1
+
+#             non_const_branches = PathEdge[]
+
+#             for branch in child_branches
+#                 if !any(reachable_variables(branch)) #no reachable variables so verify that the child node is a constant.
+#                     @assert is_constant(node(graph, bott_vertex(branch))) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+#                 else
+#                     push!(non_const_branches, branch)
+#                 end
+#             end
+
+#             if length(non_const_branches) > 1
+#                 duplicate_reachables = zeros(Int64, domain_dimension(graph))
+
+#                 duplicates!(duplicate_reachables, non_const_branches, reachable_variables)
+
+#                 if any(x -> x > 1, duplicate_reachables)
+#                     @info "duplicate paths to variables $(findall(x->x>1,duplicate_reachables)) from node $a"
+#                     valid_graph = false
+#                 end
+#             end
+#         end
+
+#         child_paths = children(graph, a)
+#         if child_paths !== nothing
+#             for child in children(graph, a)
+#                 valid_graph = valid_graph & _verify_paths(graph, child, visited) #if any node has invalid paths valid_graph will be false
+#             end
+#         end
+
+#         check_continuity(graph, a)
+#         visited[a] = valid_graph
+
+#         return valid_graph
+#     end
+# end
+
+function _verify_paths(graph, a, visited)
     if get(visited, a, nothing) !== nothing #don't reprocess vertices that have already been visited.
         return visited[a]
     else
-        child_branches = child_edges(graph, a)
-        parent_branches = parent_edges(graph, a)
+        cedges = child_edges(graph, a)
         valid_graph = true
 
-        if length(parent_branches) > 1 && !is_constant(node(graph, a)) #don't care how many paths to roots from constant nodes
-            duplicate_reachables = zeros(Int64, codomain_dimension(graph))
+        #seems like testing for non duplicate paths is inherently O(n^2). Most graphs don't seem to have a large number of internal edges so this shouldn't normally be a problem.
+        for i in 1:length(cedges)
+            for j in i+1:length(cedges)
+                rrts1 = reachable_roots(cedges[i])
+                rrts2 = reachable_roots(cedges[j])
+                rvars1 = reachable_variables(cedges[i])
+                rvars2 = reachable_variables(cedges[j])
 
-            duplicates!(duplicate_reachables, parent_branches, reachable_roots)
-
-            if any(x -> x > 1, duplicate_reachables)
-                @info "duplicate paths to roots $(findall(x->x>1,duplicate_reachables)) from node $a"
-                valid_graph = false
-            end
-        end
-
-
-        if length(child_branches) > 1
-
-            non_const_branches = PathEdge[]
-
-            for branch in child_branches
-                if !any(reachable_variables(branch)) #no reachable variables so verify that the child node is a constant.
-                    @assert is_constant(node(graph, bott_vertex(branch)))
-                else
-                    push!(non_const_branches, branch)
-                end
-            end
-
-            if length(non_const_branches) > 1
-                duplicate_reachables = zeros(Int64, domain_dimension(graph))
-
-                duplicates!(duplicate_reachables, non_const_branches, reachable_variables)
-
-                if any(x -> x > 1, duplicate_reachables)
-                    @info "duplicate paths to variables $(findall(x->x>1,duplicate_reachables)) from node $a"
+                if any(rrts1 .& rrts2) && any(rvars1 .& rvars2) #have more than one path from some root(s) to some variable(s)
                     valid_graph = false
                 end
             end
         end
 
         child_paths = children(graph, a)
-        if child_paths !== nothing
+        if valid_graph && child_paths !== nothing
             for child in children(graph, a)
-                valid_graph = valid_graph & _verify_paths(graph, child, visited) #if any node has invalid paths valid_graph will be false
+                valid_graph = valid_graph && _verify_paths(graph, child, visited) #if any node has invalid paths valid_graph will be false
             end
         end
 
@@ -818,6 +808,7 @@ function _verify_paths(graph::DerivativeGraph{T}, a::T, visited::Dict{T,Bool}) w
         return valid_graph
     end
 end
+
 
 """verifies that there is a single path from each root to each variable, if such a path exists."""
 function verify_paths(graph::DerivativeGraph{T}) where {T}

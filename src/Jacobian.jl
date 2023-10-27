@@ -38,7 +38,7 @@ function _symbolic_jacobian!(graph::DerivativeGraph, partial_variables::Abstract
     result = Matrix{Node}(undef, outdim, length(partial_variables))
     factor!(graph)
 
-    @assert verify_paths(graph) #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
+    @assert verify_paths(graph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
 
     for (i, var) in pairs(partial_variables)
         var_index = variable_node_to_index(graph, var)
@@ -105,7 +105,7 @@ function _sparse_symbolic_jacobian!(graph::DerivativeGraph, partial_variables::A
 
     factor!(graph)
 
-    @assert verify_paths(graph) #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
+    @assert verify_paths(graph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
     #input is an array of Node's representing variables. Need a mapping from the variable index matching the Node to the index in variable_ordering
     variable_index = map(x -> variable_postorder_to_index(graph, postorder_number(graph, x)), partial_variables)
 
@@ -182,7 +182,7 @@ function jacobian_times_v(terms::AbstractVector{T}, partial_variables::AbstractV
 
 
 
-    @assert verify_paths(graph) #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
+    @assert verify_paths(graph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
 
     for (i, var) in pairs(partial_variables)
         var_index = variable_node_to_index(graph, var)
@@ -253,7 +253,7 @@ function jacobian_transpose_v(terms::AbstractVector{T}, partial_variables::Abstr
         result[i] = Node(0.0)
     end
 
-    @assert verify_paths(graph) #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
+    @assert verify_paths(graph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
 
     for (i, var) in pairs(partial_variables)
         for root_index in 1:codomain_dimension(graph)
