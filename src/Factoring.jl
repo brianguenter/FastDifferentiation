@@ -303,39 +303,39 @@ end
 
 """Returns true if a new factorable subgraph was created inside `subgraph` during the factorization process. This will cause a branch internal to the subgraph. `subgraph_exists` should be called before executing this function otherwise it may return false when no new subgraphs have been created."""
 
-function is_branching(subgraph, sub_edges)
-    for edge in sub_edges
-        #look for a an upward branch
-        if forward_vertex(subgraph, edge) != dominating_node(subgraph)
-            let count = 0
-                tmp = forward_edges(subgraph, edge)
-                for fedge in tmp
-                    if fedge ∈ sub_edges
-                        count += 1
-                    end
-                    if count > 1
-                        return true
-                    end
-                end
-            end
-        end
-        #look for a downward branch
-        if backward_vertex(subgraph, edge) != dominated_node(subgraph)
-            let count = 0
-                tmp = backward_edges(subgraph, edge)
-                for bedge in tmp
-                    if bedge ∈ sub_edges
-                        count += 1
-                    end
-                    if count > 1
-                        return true
-                    end
-                end
-            end
-        end
-    end
-    return false
-end
+# function is_branching(subgraph, sub_edges)
+#     for edge in sub_edges
+#         #look for a an upward branch
+#         if forward_vertex(subgraph, edge) != dominating_node(subgraph)
+#             let count = 0
+#                 tmp = forward_edges(subgraph, edge)
+#                 for fedge in tmp
+#                     if fedge ∈ sub_edges
+#                         count += 1
+#                     end
+#                     if count > 1
+#                         return true
+#                     end
+#                 end
+#             end
+#         end
+#         #look for a downward branch
+#         if backward_vertex(subgraph, edge) != dominated_node(subgraph)
+#             let count = 0
+#                 tmp = backward_edges(subgraph, edge)
+#                 for bedge in tmp
+#                     if bedge ∈ sub_edges
+#                         count += 1
+#                     end
+#                     if count > 1
+#                         return true
+#                     end
+#                 end
+#             end
+#         end
+#     end
+#     return false
+# end
 
 """sorts edges by reverse postorder of the `top_vertex(edge)`"""
 function sort_edge_list!(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, edge_list) where {T}

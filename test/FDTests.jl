@@ -829,7 +829,6 @@ end
 
     sub_edges = FD.subgraph_edges(_1_4_sub)
     @test issetequal(_1_4_sub_ref, sub_edges)
-    @test !FD.is_branching(_1_4_sub, sub_edges)
 
     FD.factor_subgraph!(_1_4_sub)
     _1_7_sub_ref = Set(map(x -> x[1], FD.edges.(Ref(dgraph), ((4, 1), (3, 1), (7, 4), (7, 6), (6, 3)))))
