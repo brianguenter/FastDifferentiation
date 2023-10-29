@@ -85,8 +85,8 @@ end
     subs = extract_all!(subs_heap)
     _5_3 = subs[1]
     @test (5, 3) == FD.vertices(_5_3)
-    sub_edges = Set{FD.PathEdge{Int64}}()
-    @test FD.subgraph_edges!(sub_edges, _5_3)
+
+    sub_edges = FD.subgraph_edges(_5_3)
     non_dom_edges = FD.find_non_dom_edges(_5_3, sub_edges)
 
 
@@ -97,8 +97,8 @@ end
 
     _2_4 = subs[2]
     @test (2, 4) == FD.vertices(_2_4)
-    empty!(sub_edges)
-    sub_edges = FD.subgraph_edges!(sub_edges, _2_4)
+
+    sub_edges = FD.subgraph_edges(_2_4)
     non_dom_edges = FD.find_non_dom_edges(_2_4, sub_edges)
 
     @test length(non_dom_edges) == 1
@@ -1060,8 +1060,8 @@ end
     subs = extract_all!(sub_heap)
 
     _5_3 = filter(x -> FD.vertices(x) == (5, 3), subs)[1]
-    sub_edges = Set{PathEdge{T}}()
-    @test FD.subgraph_edges!(_5_3, sub_edges)
+
+    sub_edges = FD.subgraph_edges(_5_3)
     e_5_3 = FD.make_factored_edge(_5_3, FD.evaluate_subgraph(_5_3, sub_edges))
 
     _3_5 = filter(x -> FD.vertices(x) == (3, 5), subs)[1]

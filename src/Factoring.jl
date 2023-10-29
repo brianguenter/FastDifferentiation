@@ -542,13 +542,10 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         end
     end
 
-    sub_edges = Set{PathEdge{T}}()
-
-    @assert subgraph_edges(subgraph, sub_edges)
+    sub_edges = subgraph_edges(subgraph)
 
     local new_edge::PathEdge{T}
-    if subgraph_exists(subgraph, sub_edges)
-
+    if length(sub_edges) > 0 #valid subgraph
 
         sum = evaluate_subgraph(subgraph, sub_edges)
 
@@ -597,23 +594,13 @@ predecessor_edges(sub::FactorableSubgraph{T,DominatorSubgraph}, node_index::Inte
 predecessor_edges(sub::FactorableSubgraph{T,PostDominatorSubgraph}, node_index::Integer) where {T<:Integer} = filter(x -> test_edge(sub, x), child_edges(graph(sub), node_index)) #filter allocates: may be efficiency issue.
 
 
-"""Computes idoms for special case when new factorable subgraphs are created by factorization. This seems redundant with compute_factorable_subgraphs, fill_idom_tables, etc. but invariants that held when graph was first factored no longer hold so need specialized code. Not currently used, experimental code."""
-function compute_internal_idoms(subgraph::FactorableSubgraph{T}) where {T}
-    _, sub_nodes = deconstruct_subgraph(subgraph)
-    order!(subgraph, sub_nodes)
-    compressed_index = Dict((sub_nodes[i] => i) for i in eachindex(sub_nodes))
-
-    preds = [map(x -> compressed_index[x], predecessors(subgraph, node)) for node in sub_nodes] #allocates but this function should rarely be called
-    compressed_doms = simple_dominance(preds) #idom table in compressed index format_string
-    return Dict{T,T}([(sub_nodes[i], sub_nodes[compressed_doms[i]]) for i in eachindex(sub_nodes)])
-end
-
-
 ### These functions are used to evaluate subgraphs with branches created by factorization. This is not the most efficient way to evalute these subgraphs since terms in products are not ordered by uses. But subgraphs with branching seem rare and this is much simpler than recomputing the factorable subgraphs internal to a branching subgraph. Optimize if efficieny becomes an issue.
 
 function vertex_counts(subgraph::FactorableSubgraph{T}) where {T}
     counts = Dict{T,T}()
-    sub_edges, sub_nodes = deconstruct_subgraph(subgraph)
+    result = deconstruct_subgraph(subgraph)
+    @assert result !== nothing
+    sub_edges, sub_nodes = result
 
     for node in sub_nodes
         tmp = count(x -> in(x, sub_edges), backward_edges(subgraph, node)) #only count the child edges that are in the subgraph

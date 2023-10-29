@@ -38,7 +38,7 @@ function _symbolic_jacobian!(graph::DerivativeGraph, partial_variables::Abstract
     result = Matrix{Node}(undef, outdim, length(partial_variables))
     factor!(graph)
 
-    @assert verify_paths(graph) "This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
+    @assert verify_paths(graph) "Failed to have a single path between each root and each variable. This is a bug. Please create an issue on the FastDifferentiation.jl repo." #ensure a single path from each root to each variable. Derivative is likely incorrect if this is not true.
 
     for (i, var) in pairs(partial_variables)
         var_index = variable_node_to_index(graph, var)
