@@ -349,40 +349,53 @@ end
 
 """Finds all edges in subgraph."""
 function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgraph{T}) where {T}
-    tmp = subgraph_edges!(sub_edges, subgraph, Set{PathEdge{T}}(), dominated_node(subgraph))
-    @assert tmp
+    subgraph_edges!(sub_edges, subgraph, dominated_node(subgraph))
     verify_subgraph_paths(subgraph, sub_edges)
-    return tmp
+end
+
+"""Convenience function so user doesn't have to create Set argument"""
+function subgraph_edges(subgraph::FactorableSubgraph{T}) where {T}
+    sub_edges = Set{PathEdge{T}}()
+    subgraph_edges!(sub_edges, subgraph)
+    return sub_edges
 end
 
 """
-    subgraph_edges(
-        subgraph::FactorableSubgraph{T},
+    subgraph_edges!(
         sub_edges::Union{Nothing,Set{PathEdge{T}}}=nothing,
+        subgraph::FactorableSubgraph{T},       
         visited::Union{Nothing,Set{PathEdge{T}}}=nothing,
         curr_node::Union{Nothing,T}=nothing
     )
 
 Returns all edges in the subgraph as a set. Recursively traverses the subgraph so will work even for subgraphs with branching paths."""
-function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgraph{T}, visited::Set{PathEdge{T}}, curr_node::T) where {T}
-    path_forward = true
+function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgraph{T}, curr_node::T) where {T}
+    if curr_node == dominating_node(subgraph)
+        return true
+    else
+        fedges = forward_edges(subgraph, curr_node)
+        path_forward = false
 
-    for fedge in forward_edges(subgraph, curr_node)
-        if !in(fedge, visited) #already verified this path
-            push!(visited, fedge)
+        #this handles the case when there are either no forward edges or none of the forward edges are valid subgraph edges.
+        for fedge in fedges
+            if test_edge(subgraph, fedge)
+                path_forward = true
+            end
+        end
+
+        @assert path_forward #curr_node != dominating node but no path forward. The path from dominated node to dominating node is broken.
+        #recurse to verify other edges all satisfy invariant
+        for fedge in forward_edges(subgraph, curr_node)
             if test_edge(subgraph, fedge) #there is a valid path forward
                 push!(sub_edges, fedge)
                 fvert = forward_vertex(subgraph, fedge)
-                if fvert != dominating_node(subgraph)
-                    path_forward = path_forward && subgraph_edges!(sub_edges, subgraph, visited, fvert)
-                end
-            elseif curr_node != dominating_vertex(subgraph) #no path forward so curr_node should be the dominating vertex. If it isn't then at least one of the paths in the subgraph is broken.
-                path_forward = false
+                subgraph_edges!(sub_edges, subgraph, fvert)
             end
         end
+        return true #tested all the valid forward paths and none returned false so all forward paths from this vertex make it to the dominating node.
     end
-    return path_forward
 end
+
 
 
 """

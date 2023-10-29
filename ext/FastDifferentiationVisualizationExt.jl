@@ -6,7 +6,7 @@
 module FastDifferentiationVisualizationExt
 using FastDifferentiation
 import FastDifferentiation: make_dot_file, draw_dot, write_dot
-using FastDifferentiation: Node, PathEdge, nodes, postorder_number, is_root, is_variable, is_constant, value, unique_edges, top_vertex, bott_vertex, graph, subgraph_edges, AutomaticDifferentiation, reachable_roots, reachable_variables, node, parent_edges, variable_postorder_to_index, root_postorder_to_index, DerivativeGraph, child_edges, reachability_string
+using FastDifferentiation: Node, PathEdge, nodes, postorder_number, is_root, is_variable, is_constant, value, unique_edges, top_vertex, bott_vertex, graph, subgraph_edges!, AutomaticDifferentiation, reachable_roots, reachable_variables, node, parent_edges, variable_postorder_to_index, root_postorder_to_index, DerivativeGraph, child_edges, reachability_string
 using ElectronDisplay
 
 function label_func(mask::BitVector, label_string::String)
@@ -147,8 +147,10 @@ end
 
 function draw_dot(subgraph::FastDifferentiation.FactorableSubgraph; graph_label::String="", reachability_labels=true, value_labels=false)
     println("in draw_dot")
-    subedges = collect(subgraph_edges(subgraph))
-    println("subedges $subedges")
+    good_subgraph, edges = subgraph_edges(subgraph)
+    @assert good_subgraph "subgraph did not have complete paths from dominated vertex to dominating vertex"
+    subedges = collect(edges)
+
     copyedges = similar(subedges, eltype(subedges), 0)
     for edge in subedges
         append!(copyedges, parent_edges(graph(subgraph), edge))
