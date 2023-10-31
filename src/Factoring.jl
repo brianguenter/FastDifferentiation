@@ -469,7 +469,7 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {
                     temp_dom = PathEdge(top_vertex(_edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
                 else
 
-                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for roots not in the     dominance mask    
+                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for variables not in the     dominance mask    
                 end
             end
         end
@@ -489,8 +489,11 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {
         #see if edges can be merged
 
         if tmp_dom !== nothing && bypass !== nothing
-            if (reachable_roots(tmp_dom) == reachable_roots(bypass)) || (reachable_variables(tmp_dom) == reachable_variables(bypass))
-                push!(bypass_edges, deepcopy(edge)) #don't need to split edge
+            if (reachable_roots(tmp_dom) == reachable_roots(bypass))
+                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(tmp_dom) .| reachable_variables(bypass), reachable_roots(tmp_dom))) #don't need to split edge
+            elseif (reachable_variables(tmp_dom) == reachable_variables(bypass))
+                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(tmp_dom), reachable_roots(tmp_dom)) .| reachable_roots(bypass)) #don't need to split edge
+
             end
         else
             if tmp_dom !== nothing
