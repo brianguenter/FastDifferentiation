@@ -414,13 +414,15 @@ function compute_vertex_masks(subgraph::FactorableSubgraph{T}, sub_edges) where 
 end
 
 """Find edges which bypass the non-dominant vertex of a subgraph. These edges must be preserved after factorization"""
-function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
+function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {T,S<:AbstractFactorableSubgraph}
     edge_list = collect(sub_edges)
 
     sort_edge_list!(subgraph, edge_list) #sorts edges by postorder for DominatorSubgraph and reverse postorder for PostDominatorSubgraph.
 
     vertex_masks = Dict{T,BitVector}()
     vertex_masks[dominated_node(subgraph)] = falses(non_dominance_dimension(subgraph)) #
+
+    #this propagates bypass reachability bits through the graph in the forward_vertex direction. The vertices are visited in this order because the edge list is sorted by postorder or reverse postorder number. 
 
     #compute vertex masks for all edges
     for edge in edge_list
@@ -440,20 +442,40 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
                     tmp_mask .= tmp_mask .| interior_mask
                 end
 
-                if cedge ∉ sub_edges
-                    if any(reachable_dominance(subgraph) .& reachable_dominance(subgraph, cedge))
+                if cedge ∉ sub_edges #backward edge is not one of the subgraph edges - see if this edge bypasses the non-dominant vertex.
+                    if any(reachable_dominance(subgraph) .& reachable_dominance(subgraph, cedge)) #only care about edges which are dominated by the dominating vertex of the subgraph.
                         tmp_mask .= tmp_mask .| non_dominance_mask(subgraph, cedge) #if any edge bypasses the dominated node then write a 1 in the mask for all the variable/root indices reachable from that edge
                     end
                 else
-                    tmp_mask .= tmp_mask .| (vertex_masks[backward_vertex(subgraph, cedge)])
+                    tmp_mask .= tmp_mask .| (vertex_masks[backward_vertex(subgraph, cedge)]) #propagate bypass reachability bits from vertices earlier in the sort order.
                 end
             end
         end
     end
 
     bypass_edges = PathEdge[]
+    non_dom_edges = PathEdge[]
 
+    #every vertex now has associated bypass reachability bits. Create bypass edges, if necessary.
     for edge in sub_edges
+
+        tmp_dom::Union{Nothing,PathEdge{T}} = nothing
+        edge_mask = reachable_dominance(subgraph, edge)
+        some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
+        if (some_dom_reachable)
+            diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
+            if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the edge. Split if true.
+                if S === DominatorSubgraph
+                    temp_dom = PathEdge(top_vertex(_edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
+                else
+
+                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for roots not in the     dominance mask    
+                end
+            end
+        end
+
+        bypass::Union{Nothing,PathEdge{T}} = nothing
+
         back_mask = vertex_masks[backward_vertex(subgraph, edge)]
         feasible_split = back_mask .& reachable_non_dominance(subgraph, edge) #can only split if paths are present in the edge.
         if any(feasible_split)
@@ -462,11 +484,26 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T}, sub_edges) where {T}
             else
                 bypass = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_dominance(subgraph), copy(back_mask))
             end
-            push!(bypass_edges, bypass)
+        end
+
+        #see if edges can be merged
+
+        if tmp_dom !== nothing && bypass !== nothing
+            if (reachable_roots(tmp_dom) == reachable_roots(bypass)) || (reachable_variables(tmp_dom) == reachable_variables(bypass))
+                push!(bypass_edges, deepcopy(edge)) #don't need to split edge
+            end
+        else
+            if tmp_dom !== nothing
+                push!(non_dom_edges, tmp_dom)
+            end
+
+            if bypass !== nothing
+                push!(bypass_edges, bypass)
+            end
         end
     end
 
-    return bypass_edges
+    return bypass_edges, non_dom_edges
 end
 
 
@@ -550,11 +587,10 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         sum = evaluate_subgraph(subgraph, sub_edges)
 
         new_edge = make_factored_edge(subgraph, sum)
-        @assert is_reachable(subgraph, new_edge) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+        @assert is_reachable(subgraph, new_edge) "Edge did not connect at least one root and one variable. This should never happen; it's a bug. Please create an issue on the FastDifferentiation.jl repo."
 
-        non_dom_edges = find_non_dom_edges(subgraph, sub_edges)
 
-        bypass_edges = find_bypass_edges(subgraph, sub_edges)
+        bypass_edges, non_dom_edges = find_bypass_edges(subgraph, sub_edges)
 
         gr = graph(subgraph)
         for edge in non_dom_edges

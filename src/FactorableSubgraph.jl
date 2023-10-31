@@ -259,8 +259,8 @@ function find_non_dom_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where 
 
     #non-dom edges should not have zero reachability
     for edge in temp_edges
-        @assert any(reachable_dominance(subgraph, edge)) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
-        @assert any(reachable_non_dominance(subgraph, edge)) "This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+        @assert any(reachable_dominance(subgraph, edge)) "non-dom edge had zero roots reachability. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+        @assert any(reachable_non_dominance(subgraph, edge)) "non-dom edge had zero variables reachability. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
     end
 
     return temp_edges
