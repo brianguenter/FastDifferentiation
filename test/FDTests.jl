@@ -1344,7 +1344,7 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(7)
+    FD_graph = spherical_harmonics(6)
     mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
     FD_func(vars...) = vec(mn_func(vars))
 

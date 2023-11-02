@@ -459,14 +459,14 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {
     #every vertex now has associated bypass reachability bits. Create bypass edges, if necessary.
     for edge in sub_edges
 
-        tmp_dom::Union{Nothing,PathEdge{T}} = nothing
+        temp_dom::Union{Nothing,PathEdge{T}} = nothing
         edge_mask = reachable_dominance(subgraph, edge)
         some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
         if (some_dom_reachable)
             diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
             if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the edge. Split if true.
                 if S === DominatorSubgraph
-                    temp_dom = PathEdge(top_vertex(_edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
+                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
                 else
 
                     temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for variables not in the     dominance mask    
@@ -486,23 +486,26 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {
             end
         end
 
-        #see if edges can be merged
+        #see if edges can be merged. Put the merged edges in the bypass_edges list. Could also go in non_dom_edges, but only in one or the other.
 
-        if tmp_dom !== nothing && bypass !== nothing
-            if (reachable_roots(tmp_dom) == reachable_roots(bypass))
-                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(tmp_dom) .| reachable_variables(bypass), reachable_roots(tmp_dom))) #don't need to split edge
-            elseif (reachable_variables(tmp_dom) == reachable_variables(bypass))
-                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(tmp_dom), reachable_roots(tmp_dom)) .| reachable_roots(bypass)) #don't need to split edge
+        merged = false
+        if temp_dom !== nothing && bypass !== nothing
+            if (reachable_roots(temp_dom) == reachable_roots(bypass))
+                merged = true
+                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(temp_dom) .| reachable_variables(bypass), reachable_roots(temp_dom))) #don't need to split edge
+            elseif (reachable_variables(temp_dom) == reachable_variables(bypass))
+                merged = true
+                push!(bypass_edges, PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), reachable_variables(temp_dom), reachable_roots(temp_dom) .| reachable_roots(bypass))) #don't need to split edge
 
             end
-        else
-            if tmp_dom !== nothing
-                push!(non_dom_edges, tmp_dom)
-            end
+        end
 
-            if bypass !== nothing
-                push!(bypass_edges, bypass)
-            end
+        if !merged && temp_dom !== nothing
+            push!(non_dom_edges, temp_dom)
+        end
+
+        if !merged && bypass !== nothing
+            push!(bypass_edges, bypass)
         end
     end
 
