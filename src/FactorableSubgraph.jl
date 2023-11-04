@@ -431,6 +431,15 @@ function subgraph_edges!(sub_edges::Set{PathEdge{T}}, subgraph::FactorableSubgra
     end
 end
 
+"""computes the unique vertices in a factorable subgraph"""
+function all_vertices(subgraph::FactorableSubgraph{T}) where {T}
+    sub_edges = subgraph_edges(subgraph)
+    verts = Set{T}()
+    for sub_edge in sub_edges
+        push!(verts, vertices(sub_edge)...)
+    end
+    return verts
+end
 
 
 """

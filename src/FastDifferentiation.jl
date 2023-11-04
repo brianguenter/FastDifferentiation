@@ -31,6 +31,11 @@ macro invariant(ex, msgs...)
 end
 
 
+RUN_CONTINUITY_CHECKS = false #this should be false during normal use. Only want to turn it on when you suspect a derivative is being computed incorrectly, or when debugging.
+
+set_checks(a::Bool) = global RUN_CONTINUITY_CHECKS = a
+export set_checks
+
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 

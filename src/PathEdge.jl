@@ -102,10 +102,12 @@ end
 
 """Used for debugging and visualization of graphs"""
 function reachability_string(e::PathEdge)
-    roots = "r[" * join(findall(x -> x == 1, reachable_roots(e)), ",") * "]"
-    variables = "v[" * join(findall(x -> x == 1, reachable_variables(e)), ",") * "]"
+    roots = "r[" * reachability_string(reachable_roots(e)) * "]"
+    variables = "v[" * reachability_string(reachable_variables(e)) * "]"
     return roots, variables
 end
+
+reachability_string(bvec::BitVector) = join(findall(x -> x == 1, bvec), ",")
 
 mask_roots!(e::PathEdge, mask::BitVector) = e.reachable_roots .= e.reachable_roots .& mask
 mask_variables!(e::PathEdge, mask::BitVector) = e.reachable_variables .= e.reachable_variables .& mask

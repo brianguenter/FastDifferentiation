@@ -108,7 +108,6 @@ function factor_order(a::FactorableSubgraph, b::FactorableSubgraph)
     end
 end
 
-
 sort_in_factor_order!(a::AbstractVector{T}) where {T<:FactorableSubgraph} = sort!(a, lt=factor_order)
 
 
@@ -270,18 +269,59 @@ function reclaim_edge_vector(edges::Vector{PathEdge{Int64}})
     return nothing
 end
 
-function make_factored_edge(subgraph::FactorableSubgraph{T,DominatorSubgraph}, sum::Node) where {T}
-    roots_reach = copy(reachable_dominance(subgraph))
-    vars_reach = copy(reachable_variables(subgraph))
-    return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
+function factored_reachable_roots(subgraph::FactorableSubgraph{T,DominatorSubgraph}, sub_edges) where {T}
+    result = falses(codomain_dimension(graph(subgraph)))
+
+    for edge in child_edges(graph(subgraph), dominating_node(subgraph))
+        if edge ∈ sub_edges
+            result .= result .| reachable_roots(edge)
+        end
+    end
+    result .= result .& reachable_dominance(subgraph) #only the roots that are in the dominance set are counted here because this is used to determine the reachability of the subgraph sum.
+    return result
 end
 
-function make_factored_edge(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, sum::Node) where {T}
-    roots_reach = copy(reachable_roots(subgraph)) #wrong
-    vars_reach = copy(reachable_dominance(subgraph))
-    return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
+function factored_reachable_roots(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, sub_edges) where {T}
+    result = falses(codomain_dimension(graph(subgraph)))
+
+    for edge in child_edges(graph(subgraph), dominated_node(subgraph))
+        if edge ∈ sub_edges
+            result .= result .| reachable_roots(edge)
+        end
+    end
+    return result
 end
 
+function factored_reachable_variables(subgraph::FactorableSubgraph{T,DominatorSubgraph}, sub_edges) where {T}
+    result = falses(domain_dimension(graph(subgraph)))
+
+    for edge in parent_edges(graph(subgraph), dominated_node(subgraph))
+        if edge ∈ sub_edges
+            result .= result .| reachable_variables(edge)
+        end
+    end
+    return result
+end
+
+function factored_reachable_variables(subgraph::FactorableSubgraph{T,PostDominatorSubgraph}, sub_edges) where {T}
+    result = falses(domain_dimension(graph(subgraph)))
+
+    for edge in parent_edges(graph(subgraph), dominating_node(subgraph))
+        if edge ∈ sub_edges
+            result .= result .| reachable_variables(edge)
+        end
+    end
+
+    result .= result .& reachable_dominance(subgraph) #only the variables that are in the dominance set are counted here because this is used to determine the reachability of the subgraph sum.
+    return result
+end
+
+
+function make_factored_edge(subgraph::FactorableSubgraph, sub_edges, sum::Node)
+    roots_reach = factored_reachable_roots(subgraph, sub_edges)
+    vars_reach = factored_reachable_variables(subgraph, sub_edges)
+    return PathEdge(dominating_node(subgraph), dominated_node(subgraph), sum, vars_reach, roots_reach)
+end
 
 """returns the number of subgraph edges incident on `dominated_node(subgraph)` and `dominating_node(subgraph)`"""
 function dom_nodes_edge_count(subgraph, sub_edges)
@@ -461,16 +501,18 @@ function find_bypass_edges(subgraph::FactorableSubgraph{T,S}, sub_edges) where {
 
         temp_dom::Union{Nothing,PathEdge{T}} = nothing
         edge_mask = reachable_dominance(subgraph, edge)
-        some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
-        if (some_dom_reachable)
-            diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
-            if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the edge. Split if true.
-                if S === DominatorSubgraph
-                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
-                else
 
-                    temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for variables not in the     dominance mask    
-                end
+        #If none of the reachable roots/variables in the edge match the dominance set of the subgraph then the subgraph doesn't exist anymore, or at least this edge shouldn't be part of the subgraph.
+        some_dom_reachable = any(reachable_dominance(subgraph) .& edge_mask) #see if some reachable roots or variables are in the dominance set of the edge.
+        @assert any(some_dom_reachable) "None of the reachable variables or roots were in the dominance set of the subgraph. This is a bug; please file a bug report at the FastDifferentiation repo."
+
+        diff = set_diff(edge_mask, reachable_dominance(subgraph)) #important that diff is a new BitVector, not reused.
+        if any(diff) #see if some roots or variables not in dominance set are in the reachable set of the edge. Split if true.
+            if S === DominatorSubgraph
+                temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), copy(reachable_variables(edge)), diff) #create a new edge that accounts for roots not in the dominance mask
+            else
+
+                temp_dom = PathEdge(top_vertex(edge), bott_vertex(edge), value(edge), diff, copy(reachable_roots(edge))) #create a new edge that accounts for variables not in the     dominance mask    
             end
         end
 
@@ -556,7 +598,7 @@ function check_continuity(graph, vertex)
                 paths_above[skip_row, :] .= false
             end
 
-            @assert all(paths_above .== paths_below) "Discountinuity in reachability for vertex $vertex. paths_above = $paths_above  paths_below = $paths_below. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
+            @assert all(paths_above .== paths_below) "Discountinuity in reachability for vertex $vertex. \n paths_above = $paths_above \n paths_below = $paths_below. This is a bug. Please create an issue on the FastDifferentiation.jl repo."
         end
     end
 end
@@ -592,8 +634,9 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
 
         sum = evaluate_subgraph(subgraph, sub_edges)
 
-        new_edge = make_factored_edge(subgraph, sum)
+        new_edge = make_factored_edge(subgraph, sub_edges, sum)
         @assert is_reachable(subgraph, new_edge) "Edge did not connect at least one root and one variable. This should never happen; it's a bug. Please create an issue on the FastDifferentiation.jl repo."
+
 
 
         bypass_edges, non_dom_edges = find_bypass_edges(subgraph, sub_edges)
@@ -616,7 +659,11 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
         #verify continuity at all vertices still remaining from the subgraph. This is wasteful because it potentially checks continuity twice for each vertex in the subgraph.
 
         # #TODO remove this and replace with more efficient test below once reachability bugs are fixed
-        # edge_continuity(graph(subgraph), unique_edges(graph(subgraph)))
+
+        if RUN_CONTINUITY_CHECKS
+            edge_continuity(graph(subgraph), unique_edges(graph(subgraph)))
+        end
+
         # #end section to remove
 
         # edge_continuity(graph(subgraph), vcat(bypass_edges, non_dom_edges)) #only have to check continuity at newly created edges since subedges have been deleted.

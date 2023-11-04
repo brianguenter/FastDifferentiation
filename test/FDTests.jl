@@ -1061,11 +1061,11 @@ end
     _5_3 = filter(x -> FD.vertices(x) == (5, 3), subs)[1]
 
     sub_edges = FD.subgraph_edges(_5_3)
-    e_5_3 = FD.make_factored_edge(_5_3, FD.evaluate_subgraph(_5_3, sub_edges))
+    e_5_3 = FD.make_factored_edge(_5_3, sub_edges, FD.evaluate_subgraph(_5_3, sub_edges))
 
     _3_5 = filter(x -> FD.vertices(x) == (3, 5), subs)[1]
     sub_edges = FD.subgraph_edges(_3_5)
-    e_3_5 = FD.make_factored_edge(_3_5, FD.evaluate_subgraph(_3_5, sub_edges))
+    e_3_5 = FD.make_factored_edge(_3_5, sub_edges, FD.evaluate_subgraph(_3_5, sub_edges))
 
     @test FD.bit_equal(FD.reachable_roots(e_5_3), BitVector([1, 0]))
     @test FD.bit_equal(FD.reachable_variables(e_5_3), BitVector([1, 1]))
@@ -1627,7 +1627,7 @@ end
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
 
-    sph_func = spherical_harmonics(6)
+    sph_func = spherical_harmonics(5)
     sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
     mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
 

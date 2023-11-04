@@ -32,6 +32,12 @@ end
 function edges_from_node(graph, start_node_number::AbstractVector{Int})
     result = Set{PathEdge}()
     work_queue = Int[]
+    for node_num in start_node_number
+        pedges = parent_edges(graph, node_num)
+        if length(pedges) != 0
+            push!(result, pedges...)
+        end
+    end
     append!(work_queue, start_node_number)
     while length(work_queue) != 0
         curr_node = pop!(work_queue)
