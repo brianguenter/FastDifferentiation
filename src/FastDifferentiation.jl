@@ -31,10 +31,6 @@ macro invariant(ex, msgs...)
 end
 
 
-RUN_CONTINUITY_CHECKS = false #this should be false during normal use. Only want to turn it on when you suspect a derivative is being computed incorrectly, or when debugging.
-
-set_checks(a::Bool) = global RUN_CONTINUITY_CHECKS = a
-export set_checks
 
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
@@ -45,6 +41,16 @@ include("Methods.jl")
 include("Utilities.jl")
 include("BitVectorFunctions.jl")
 include("ExpressionGraph.jl")
+
+#these definitions must come after ExpressionGraph.jl include because they depend on Node which is defined in ExpressionGraph.jl
+RUN_GRAPH_VERIFICATION = true #this should be false during normal use. Only want to turn it on when you suspect a derivative is being computed incorrectly, or when debugging.
+GLOBAL_JACOBIAN::Matrix{Node} = Node[] #only used for debugging.
+GLOBAL_VARIABLES::Vector{Node} = Node[] #only used for debugging.
+GLOBAL_INPUT::Vector{Float64} = Float64[] #only used for debugging.
+
+set_checks(a::Bool) = global RUN_GRAPH_VERIFICATION = a
+export set_checks
+
 include("PathEdge.jl")
 include("DerivativeGraph.jl")
 include("Reverse.jl")

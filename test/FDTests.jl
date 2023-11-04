@@ -1636,6 +1636,10 @@ end
         rev_jac[i, :] .= FD.reverse_AD(root, FD.variables(sph_func))
     end
 
+    rev_jac2 = reverse_AD(sph_func)
+
+    @test all(rev_jac2 .== rev_jac)
+
     mn_func2 = FD.make_function(rev_jac, FD.variables(sph_func))
 
     test_vector = rand(3)

@@ -6,7 +6,7 @@
 module FastDifferentiationVisualizationExt
 using FastDifferentiation
 import FastDifferentiation: make_dot_file, draw_dot, write_dot
-using FastDifferentiation: Node, PathEdge, nodes, postorder_number, is_root, is_variable, is_constant, value, unique_edges, top_vertex, bott_vertex, graph, subgraph_edges!, AutomaticDifferentiation, reachable_roots, reachable_variables, node, parent_edges, variable_postorder_to_index, root_postorder_to_index, DerivativeGraph, child_edges, reachability_string
+using FastDifferentiation: Node, PathEdge, nodes, postorder_number, is_root, is_variable, is_constant, value, unique_edges, top_vertex, bott_vertex, graph, subgraph_edges!, AutomaticDifferentiation, reachable_roots, reachable_variables, node, parent_edges, variable_postorder_to_index, root_postorder_to_index, DerivativeGraph, child_edges, reachability_string, vertices
 using ElectronDisplay
 
 function label_func(mask::BitVector, label_string::String)
@@ -95,7 +95,7 @@ function make_dot_file(graph, edges_to_draw::AbstractVector{P}, label::String, r
                 end
             end
             if reachability_labels
-                edge_label *= "  $roots  $variables"
+                edge_label *= "  $roots  $variables\n $(vertices(e))"
             end
 
             if edge_label != ""

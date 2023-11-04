@@ -54,3 +54,10 @@ function reverse_AD(a::Node, variable_order::AbstractVector{<:Node})
     end
 end
 
+function reverse_AD(a::DerivativeGraph)
+    rev_jac = Matrix{Node}(undef, codomain_dimension(a), domain_dimension(a))
+    for (i, root) in pairs(roots(a))
+        rev_jac[i, :] .= reverse_AD(root, variables(a))
+    end
+    return rev_jac
+end
