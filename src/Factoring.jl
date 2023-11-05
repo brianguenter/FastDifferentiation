@@ -749,6 +749,16 @@ function factor!(a::DerivativeGraph{T}) where {T}
         subgraph = pop!(subgraph_list)
 
         factor_subgraph!(subgraph)
+
+        if RUN_GRAPH_VERIFICATION
+            fn = make_function(GLOBAL_JACOBIAN, GLOBAL_VARIABLES)
+            orig_val = fn(GLOBAL_INPUT)
+
+            fn2 = make_function(reverse_AD(graph(subgraph)), GLOBAL_VARIABLES)
+            new_val = fn2(GLOBAL_INPUT)
+            display(new_val)
+            @assert isapprox(orig_val, new_val) "In factor! Value of derivative has changed due to factorization of subgraph $(vertices(subgraph))"
+        end
     end
 
     return nothing #return nothing so people don't mistakenly think this is returning a copy of the original graph
