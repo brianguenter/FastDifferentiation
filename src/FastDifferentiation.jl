@@ -43,7 +43,7 @@ include("BitVectorFunctions.jl")
 include("ExpressionGraph.jl")
 
 #these definitions must come after ExpressionGraph.jl include because they depend on Node which is defined in ExpressionGraph.jl
-RUN_GRAPH_VERIFICATION = true #this should be false during normal use. Only want to turn it on when you suspect a derivative is being computed incorrectly, or when debugging.
+RUN_GRAPH_VERIFICATION = false #this should be false during normal use. Only want to turn it on when you suspect a derivative is being computed incorrectly, or when debugging.
 GLOBAL_JACOBIAN::Matrix{Node} = Matrix{Node}(undef, 0, 0) #only used for debugging.
 GLOBAL_VARIABLES::Vector{Node} = Node[] #only used for debugging.
 GLOBAL_INPUT::Vector{Float64} = Float64[] #only used for debugging.

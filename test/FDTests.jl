@@ -37,7 +37,7 @@ end
     graph = FD.DerivativeGraph([n4, n5])
     subs_heap = FD.compute_factorable_subgraphs(graph)
     subs = extract_all!(subs_heap)
-    println(subs)
+
     _5_3_index = findfirst(x -> FD.vertices(x) == (5, 3), subs)
     _5_3 = subs[_5_3_index]
 
@@ -1659,7 +1659,7 @@ end
     @test isapprox(mat, [1 0; 0 1])
     fn2 = FD.make_function(A, [x, y], in_place=true, init_with_zeros=false)
     mat = [10 10; 10 10]
-    println(mat)
+
     fn2(mat, [1, 1])
     @test isapprox(mat, [1 10; 10 1])
 
@@ -1723,10 +1723,9 @@ end
         nmat2 = SMatrix{size,size,FD.Node}(FD.Node.(mat))
         nmat = FD.Node.(mat)
 
-        println(nmat2)
         func1 = FD.make_function(nmat, FD.Node[])
         func2 = FD.make_function(nmat2, FD.Node[])
-        println(func2)
+
 
         @test isapprox(func1(Float64[]), mat)
         @test isapprox(func2(Float64[]), mat)
