@@ -181,11 +181,22 @@ function simplify_check_cache(::typeof(^), a, b, cache)
     end
 end
 
-function simplify_check_cache(::typeof(*), na, nb, cache)
-    a = Node(na)
-    b = Node(nb)
+"""Sorts expressions in a canonical order so terms such as `(y*x) - (x*y)` will reduce to 0."""
+function commutativity_sort(na, nb)
+    a, b = Node.((na, nb))
 
-    #TODO sort variables so if y < x then x*y => y*x. The will automatically get commutativity.
+    if is_variable(a) && is_variable(b)
+        return sort((a, b), lt=(x, y) -> value(x) < value(y)) #sort lexicographically by variable name
+    else
+        # return sort((a, b), lt=(x, y) -> objectid(x) < objectid(y))
+        return (a, b)
+    end
+end
+
+
+function simplify_check_cache(::typeof(*), na, nb, cache)
+    (a, b) = commutativity_sort(na, nb)
+
     #c1*c2 = c3, (c1*x)*(c2*x) = c3*x
     if is_zero(a) && is_zero(b)
         return Node(value(a) + value(b)) #user may have mixed types for numbers so use automatic promotion to widen the type.
@@ -242,9 +253,9 @@ function matching_terms(lchild, rchild)
     end
 end
 
+
 function simplify_check_cache(::typeof(+), na, nb, cache)
-    a = Node(na)
-    b = Node(nb)
+    (a, b) = commutativity_sort(na, nb)
 
     #TODO sort variables so if y < x then x*y => y*x. The will automatically get commutativity.
 
@@ -270,6 +281,7 @@ end
 function simplify_check_cache(::typeof(-), na, nb, cache)
     a = Node(na)
     b = Node(nb)
+
     if a === b
         return zero(Node)
     elseif is_zero(b)
@@ -376,6 +388,7 @@ function derivative(::typeof(*), args::NTuple{N,Any}, ::Val{I}) where {N,I}
     if N == 2
         return I == 1 ? args[2] : args[1]
     else
+        throw(ErrorException("not implemented until simplify_check_cache can work with more than 2 arguments."))
         return Node(*, deleteat!(collect(args), I)...) #TODO: simplify_check_cache will only be called for 2 arguments or less. Need to extend to nary *, n> 2, if this is necessary.
     end
 end

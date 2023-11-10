@@ -603,6 +603,22 @@ function check_continuity(graph, vertex)
     end
 end
 
+"""During factorization it is possible that the factored edge will simplify to a value of 0. This function will propagate that zero value up and down through the derivative graph, elimninating unnecessary computations"""
+function propagate_zeros(graph::DerivativeGraph, edge::PathEdge)
+    throw(ErrorException("not implemented"))
+    if value(edge) == zero(Node)
+        worklist = [edge]
+
+        while length(worklist) != 0
+            curr_edge = pop!(worklist)
+            if length(edges(graph, top_vertex(curr_edge), bott_vertex(curr_edge))) == 1 #
+                append!(worklist, parent_edges(graph, curr_edge))
+                append!(worklist, child_edges(curr_edge))
+            end
+        end
+    end
+end
+
 """`find_bypass_edges` and `fin_non_dom_edges` can create redundant edges which don't need to be split. If an edge is present in both lists then merge so don't get redundant edges in tht graph"""
 # function merge_redundant_edges(nondom,bypass) where{S<:PathEdge}
 #     merged = S[]
@@ -636,8 +652,6 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
 
         new_edge = make_factored_edge(subgraph, sub_edges, sum)
         @assert is_reachable(subgraph, new_edge) "Edge did not connect at least one root and one variable. This should never happen; it's a bug. Please create an issue on the FastDifferentiation.jl repo."
-
-
 
         bypass_edges, non_dom_edges = find_bypass_edges(subgraph, sub_edges)
 
