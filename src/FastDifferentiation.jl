@@ -10,6 +10,7 @@ import Base: iterate
 using UUIDs
 using SparseArrays
 using DataStructures
+using Random
 
 
 module AutomaticDifferentiation
@@ -40,8 +41,10 @@ function set_checks(graph::DerivativeGraph)
     global RUN_GRAPH_VERIFICATION = true
     global GLOBAL_JACOBIAN = reverse_AD(graph)
     global GLOBAL_VARIABLES = variables(graph)
-    global GLOBAL_INPUT = rand(domain_dimension(graph))
+    global GLOBAL_INPUT = rand(Random.Xoshiro(12), domain_dimension(graph))
 end
+
+stop_checks() = global RUN_GRAPH_VERIFICATION = false
 
 include("Reverse.jl")
 include("GraphProcessing.jl")

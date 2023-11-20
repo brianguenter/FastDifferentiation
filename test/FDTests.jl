@@ -1344,12 +1344,14 @@ end
     include("ComplexTestFunctions.jl")
     import FiniteDifferences
 
-    FD_graph = spherical_harmonics(6)
-    mn_func = FD.make_function(FD.roots(FD_graph), FD.variables(FD_graph))
+    @variables x y z
+    sph_vars = [x, y, z]
+    FD_graph = spherical_harmonics(6, sph_vars...)
+    mn_func = FD.make_function(FD.roots(FD_graph), sph_vars)
     FD_func(vars...) = vec(mn_func(vars))
 
-    graph_vars = FD.variables(FD_graph)
-    sym_func = FD.make_function(FD.jacobian(FD.roots(FD_graph), graph_vars), graph_vars)
+
+    sym_func = FD.make_function(FD.jacobian(FD.roots(FD_graph), sph_vars), sph_vars)
 
     for xr in -1.0:0.3:1.0
         for yr in -1.0:0.3:1.0
@@ -1626,25 +1628,29 @@ end
 
 @testitem "reverse_AD" begin
     include("ComplexTestFunctions.jl")
+    using FiniteDifferences
 
-    sph_func = spherical_harmonics(5)
-    sph_jac = jacobian(FD.roots(sph_func), FD.variables(sph_func))
-    mn_func1 = FD.make_function(sph_jac, FD.variables(sph_func))
+    @variables x y z
+    sph_vars = [x, y, z]
+    FD_graph = spherical_harmonics(9, sph_vars...)
+    mn_func = FD.make_function(FD.roots(FD_graph), sph_vars)
+    FD_func(vars...) = vec(mn_func(vars))
 
-    rev_jac = similar(sph_jac)
-    for (i, root) in pairs(FD.roots(sph_func))
-        rev_jac[i, :] .= FD.reverse_AD(root, FD.variables(sph_func))
+    rev_jac = FD.reverse_AD(FD_graph, sph_vars)
+
+    mn_func2 = FD.make_function(rev_jac, sph_vars)
+
+    for xr in -1.0:0.3:1.0
+        for yr in -1.0:0.3:1.0
+            for zr = -1.0:0.3:1.0
+                finite_diff = FiniteDifferences.jacobian(FiniteDifferences.central_fdm(12, 1, adapt=3), FD_func, xr, yr, zr)
+                mat_form = hcat(finite_diff[1], finite_diff[2], finite_diff[3])
+                symbolic = mn_func2([xr, yr, zr])
+
+                @test isapprox(symbolic, mat_form, rtol=1e-8)
+            end
+        end
     end
-
-    rev_jac2 = reverse_AD(sph_func)
-
-    @test all(rev_jac2 .== rev_jac)
-
-    mn_func2 = FD.make_function(rev_jac, FD.variables(sph_func))
-
-    test_vector = rand(3)
-    @test isapprox(mn_func1(test_vector), mn_func2(test_vector), atol=1e-11)
-
 end
 
 @testitem "in place init_with_zeros" begin
@@ -1825,6 +1831,83 @@ end
 
     fourth_order_symbolic = reshape(jacobian(vec(jacobian(vec(H_symbolic), vars)), vars), (dim, dim, dim, dim))
     FO_exec = make_function(fourth_order_symbolic, vars)
+end
+
+@testitem "robotics bug test" begin
+    function cartpole(x, u, p=0, t=0)
+        mc, mp, l, g = 1.0, 0.2, 0.5, 9.81
+
+        q = x[SA[1, 2]]
+        qd = x[SA[3, 4]]
+
+        s = sin(q[2])
+        c = cos(q[2])
+
+        H = [mc+mp mp*l*c; mp*l*c mp*l^2]
+        C = [0 -mp*qd[2]*l*s; 0 0]
+        G = [0, mp * g * l * s]
+        B = [1, 0]
+        # qdd = (-H) \ (C * qd + G - B * u[1]) # Backsolve errors #20 
+        den = (H[1, 1] * H[2, 2] - H[1, 2] * H[2, 1])
+        xdd = [H[2, 2] -H[1, 2]; -H[2, 1] H[1, 1]]
+        qdd = xdd * (C * qd + G - B * u[1])
+        return [qd; qdd]
+    end
+
+    function rk4(f::F, Ts0; supersample::Integer=1) where {F}
+        supersample ≥ 1 || throw(ArgumentError("supersample must be positive."))
+        # Runge-Kutta 4 method
+        Ts = Ts0 / supersample # to preserve type stability in case Ts0 is an integer
+        let Ts = Ts
+            function (x, u, p=0, t=0)
+                T = typeof(x)
+                f1 = f(x, u, p, t)
+                f2 = f(x + Ts / 2 * f1, u, p, t + Ts / 2)
+                f3 = f(x + Ts / 2 * f2, u, p, t + Ts / 2)
+                f4 = f(x + Ts * f3, u, p, t + Ts)
+                add = Ts / 6 * (f1 + 2 * f2 + 2 * f3 + f4)
+                # This gymnastics with changing the name to y is to ensure type stability when x + add is not the same type as x. The compiler is smart enough to figure out the type of y
+                y = x + add
+                for i in 2:supersample
+                    f1 = f(y, u, p, t)
+                    f2 = f(y + Ts / 2 * f1, u, p, t + Ts / 2)
+                    f3 = f(y + Ts / 2 * f2, u, p, t + Ts / 2)
+                    f4 = f(y + Ts * f3, u, p, t + Ts)
+                    add = Ts / 6 * (f1 + 2 * f2 + 2 * f3 + f4)
+                    y += add
+                end
+                return y
+            end
+        end
+    end
+
+    function rollout(f, x0::AbstractVector, u)
+        T = promote_type(eltype(x0), eltype(u))
+        x = zeros(T, length(x0), size(u, 2))
+        x[:, 1] .= x0
+        rollout!(f, x, u)
+    end
+    function rollout!(f, x, u)
+        for i = 1:size(x, 2)-1
+            x[:, i+1] = f(x[:, i], u[:, i])
+        end
+        x, u
+    end
+
+
+    Ts = 0.01
+    N = 2 # Scale this number up to benchmark larger problems
+    u = reshape(fad.make_variables(:u, 2 * N), 2, N)
+    x0 = fad.make_variables(:x0, 4)
+
+    discrete_cartpole = rk4(cartpole, Ts)
+    x, _ = rollout(discrete_cartpole, x0, u) # Never finishes with Symbolics
+
+    vars = [x0; vec(u)]
+    c = sum(abs2, x) + sum(abs2, u)
+
+    hs = fad.sparse_hessian(c, vars) # Errors
+
 end
 
 

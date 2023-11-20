@@ -1,10 +1,9 @@
-function reverse_AD(a::DerivativeGraph, root_index::T, variable_order::AbstractVector{<:Node}) where {T<:Integer}
-
-
+"""This function can be very slow because it has to traverse a graph where some paths may not be followed due to factorization. Has to traverse every `m*n` path where `m` is number of roots and `n` is number of variables."""
+function reverse_AD(a::DerivativeGraph, root_index::T, variable_number::T) where {T<:Integer}
     let visited = Dict{Int64,Tuple{Int64,Node}}()
-        all_vars = zeros(Node, domain_dimension(a))
+        one_result = zero(Node)
 
-        function _reverseAD(a::DerivativeGraph, curr_deriv::Node, curr_vertex::Int64, all_vars, visited)
+        function _reverseAD(a::DerivativeGraph, curr_deriv::Node, curr_vertex::Int64, visited)
             if (tmp = get(visited, curr_vertex, nothing)) === nothing
                 visited[curr_vertex] = (1, curr_deriv)
             else
@@ -14,47 +13,43 @@ function reverse_AD(a::DerivativeGraph, root_index::T, variable_order::AbstractV
 
             visit_count, val = visited[curr_vertex]
 
-            prnt_edges = count(x -> reachable_roots(x)[root_index], parent_edges(a, curr_vertex))
-            if visit_count < prnt_edges && curr_vertex != root_index_to_postorder_number(a, root_index) #want to recurse immediately if started at a root with parents
-                return
-            else
+            prnt_edges = count(x -> reachable_roots(x)[root_index] && reachable_variables(x)[variable_number], parent_edges(a, curr_vertex)) #only count those edges which are reachable from the root and variable under consideration.
+
+            if curr_vertex == root_index_to_postorder_number(a, root_index) || visit_count == prnt_edges   #want to recurse immediately if started at a root with parents
                 for c_edge in child_edges(a, curr_vertex)
-                    _reverseAD(a, val * value(c_edge), bott_vertex(c_edge), all_vars, visited)
+                    if reachable_roots(c_edge)[root_index] && reachable_variables(c_edge)[variable_number]
+                        _reverseAD(a, val * value(c_edge), bott_vertex(c_edge), visited)
+                    end
                 end
 
                 if is_variable(a, curr_vertex)
-                    all_vars[variable_postorder_to_index(a, curr_vertex)] = val
+                    @assert variable_index_to_postorder_number(a, variable_number) == curr_vertex #should only be able to descend to a single variable
+                    one_result = val
                 end
+            else
+                return
             end
         end
 
+        root_postorder = root_index_to_postorder_number(a, root_index)
 
-        _reverseAD(a, one(Node), root_index_to_postorder_number(a, root_index), all_vars, visited)
+        _reverseAD(a, one(Node), root_postorder, visited)
 
-        result = Vector{Node}(undef, length(variable_order))
-
-        #now map variable values to variable_order
-        for (i, _) in pairs(variable_order)
-            result[i] = all_vars[i]
-        end
-
-        return result
+        return one_result
     end
 end
 export reverse_AD
 
-function reverse_AD(a::Node, variable_order::AbstractVector{<:Node})
-    if length(variables(a)) == 0
-        return zeros(Node, length(variable_order))
-    else
-        return reverse_AD(DerivativeGraph(a), variable_order)
-    end
-end
 
-function reverse_AD(a::DerivativeGraph)
+
+function reverse_AD(a::DerivativeGraph, vars::Vector{Node}=variables(a))
     rev_jac = Matrix{Node}(undef, codomain_dimension(a), domain_dimension(a))
+    var_indices = variable_node_to_index.(Ref(a), vars)
+
     for (i, _) in pairs(roots(a))
-        rev_jac[i, :] .= reverse_AD(a, i, variables(a))
+        for (j, col) in pairs(var_indices)
+            rev_jac[i, j] = reverse_AD(a, i, col)
+        end
     end
     return rev_jac
 end

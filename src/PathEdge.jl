@@ -97,7 +97,7 @@ num_uses(e::PathEdge) = num_reachable_variables(e) * num_reachable_roots(e)
 can_delete(e::PathEdge) = !any(reachable_roots(e)) || !any(reachable_variables(e))
 
 function Base.show(io::IO, a::PathEdge)
-    print(io, "($(top_vertex(a)) $(bott_vertex(a))  $(num_uses(a)) $(value(a)) $(reachable_roots(a)) $(reachable_variables(a)))")
+    print(io, "($(top_vertex(a)) $(bott_vertex(a))  $(num_uses(a)) $(value(a)) $(reachability_string(a)))")
 end
 
 """Used for debugging and visualization of graphs"""

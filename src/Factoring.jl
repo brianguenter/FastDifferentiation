@@ -680,9 +680,20 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
             fn = make_function(GLOBAL_JACOBIAN, GLOBAL_VARIABLES)
             orig_val = fn(GLOBAL_INPUT)
 
-            fn2 = make_function(reverse_AD(graph(subgraph)), GLOBAL_VARIABLES)
+            new_symbolic = reverse_AD(graph(subgraph), GLOBAL_VARIABLES)
+
+            fn2 = make_function(new_symbolic, GLOBAL_VARIABLES)
             new_val = fn2(GLOBAL_INPUT)
-            @assert isapprox(orig_val, new_val) "value of derivative has changed due to factorization of subgraph $(vertices(subgraph))"
+            if !isapprox(orig_val, new_val, rtol=1e-8)
+                for (index, val) in pairs(orig_val)
+                    one_diff = orig_val[index] - new_val[index]
+                    if abs(one_diff) > 1e-8
+                        @error "derivative change for ∂root_$(index[1])/∂variable_$(index[2]) (root node has postorder index $(root_index_to_postorder_number(graph(subgraph),index[1]))). Original value $(orig_val[index]) changed value $(new_val[index]) difference ($one_diff)\n symbolic before $(GLOBAL_JACOBIAN[index]) \n symbolic after $(new_symbolic[index])"
+                    end
+                end
+                throw(ErrorException("Derivative was corrupted during factorization. Create an issue on the FastDifferentiation.jl repo."))
+            end
+            # @assert isapprox(orig_val, new_val) "value of derivative has changed due to factorization of subgraph $(vertices(subgraph))"
         end
 
         # #end section to remove
@@ -750,11 +761,6 @@ end
 
 function factor!(a::DerivativeGraph{T}) where {T}
     global RUN_GRAPH_VERIFICATION, GLOBAL_JACOBIAN, GLOBAL_VARIABLES, GLOBAL_INPUT
-    if RUN_GRAPH_VERIFICATION
-        GLOBAL_JACOBIAN = reverse_AD(a)
-        GLOBAL_VARIABLES = variables(a)
-        GLOBAL_INPUT = rand(domain_dimension(a))
-    end
 
     subgraph_list = compute_factorable_subgraphs(a)
 
@@ -770,7 +776,7 @@ function factor!(a::DerivativeGraph{T}) where {T}
 
             fn2 = make_function(reverse_AD(graph(subgraph)), GLOBAL_VARIABLES)
             new_val = fn2(GLOBAL_INPUT)
-            display(new_val)
+
             @assert isapprox(orig_val, new_val) "In factor! Value of derivative has changed due to factorization of subgraph $(vertices(subgraph))"
         end
     end
