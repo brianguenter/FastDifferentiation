@@ -1834,6 +1834,8 @@ end
 end
 
 @testitem "robotics bug test" begin
+    using StaticArrays
+
     function cartpole(x, u, p=0, t=0)
         mc, mp, l, g = 1.0, 0.2, 0.5, 9.81
 
@@ -1895,10 +1897,10 @@ end
     end
 
 
-    Ts = 0.01
+    Ts = 0.1
     N = 2 # Scale this number up to benchmark larger problems
-    u = reshape(fad.make_variables(:u, 2 * N), 2, N)
-    x0 = fad.make_variables(:x0, 4)
+    u = reshape(make_variables(:u, 2 * N), 2, N)
+    x0 = make_variables(:x0, 4)
 
     discrete_cartpole = rk4(cartpole, Ts)
     x, _ = rollout(discrete_cartpole, x0, u) # Never finishes with Symbolics
@@ -1906,7 +1908,7 @@ end
     vars = [x0; vec(u)]
     c = sum(abs2, x) + sum(abs2, u)
 
-    hs = fad.sparse_hessian(c, vars) # Errors
+    hs = sparse_hessian(c, vars) # Errors
 
 end
 

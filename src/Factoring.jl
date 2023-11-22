@@ -688,7 +688,13 @@ function factor_subgraph!(subgraph::FactorableSubgraph{T}) where {T}
                 for (index, val) in pairs(orig_val)
                     one_diff = orig_val[index] - new_val[index]
                     if abs(one_diff) > 1e-8
-                        @error "derivative change for ∂root_$(index[1])/∂variable_$(index[2]) (root node has postorder index $(root_index_to_postorder_number(graph(subgraph),index[1]))). Original value $(orig_val[index]) changed value $(new_val[index]) difference ($one_diff)\n symbolic before $(GLOBAL_JACOBIAN[index]) \n symbolic after $(new_symbolic[index])"
+                        let symbol_string = ""
+                            if length(string(GLOBAL_JACOBIAN[index])) + length(string(new_symbolic[index])) < 200 #don't print out extremely long symbolic expressions. Not generally useful and overflows most terminal buffers.
+                                symbol_string = "symbolic before $(GLOBAL_JACOBIAN[index]) \n symbolic after $(new_symbolic[index])"
+                            end
+
+                            @error "Derivative changed for ∂root_$(index[1])/∂variable_$(index[2]) after factoring subgraph $(vertices(subgraph))  (root node has postorder index $(root_index_to_postorder_number(graph(subgraph),index[1]))). \n Original value $(orig_val[index]) changed value $(new_val[index]) difference ($one_diff)\n $symbol_string"
+                        end
                     end
                 end
                 throw(ErrorException("Derivative was corrupted during factorization. Create an issue on the FastDifferentiation.jl repo."))
