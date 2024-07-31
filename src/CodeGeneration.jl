@@ -53,7 +53,8 @@ function function_body!(dag::Node, variable_to_index::IdDict{Node,Int64}, node_t
 
             if is_tree(node)
                 args = _dag_to_function.(children(node))
-                statement = :($(node_to_var[node]) = $(Symbol(value(node)))($(args...)))
+                f = value(node)
+                statement = :($(node_to_var[node]) = $(Base.parentmodule(f)).$(nameof(f))($(args...)))
                 push!(body.args, statement)
             end
         end
