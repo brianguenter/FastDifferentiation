@@ -2171,4 +2171,14 @@ end
     h = make_function([if_else(sqrt(x) < 1, 0.0, sqrt(x))], [x])
     @test isapprox(h([1.5])[1], sqrt(1.5))
 
+    f = conditional_and(x < y, y > sqrt(x))
+    h = make_function([f], [x, y])
+    @test Bool(h([1.0, 2.0])[1]) #verify no exception thrown. make_function generates code that returns a float type matrix so a boolean result will be 1.0 or 0.0
+    @test_throws DomainError h([-1.0, 2.0]) #verify that the other branch is taken, sqrt(-1) is executed and an exception is thrown
+
+    f = conditional_or(x < y, y > sqrt(x))
+    h = make_function([f], [x, y])
+    @test Bool(h([1.0, 2.0])[1])
+    @test_throws DomainError h([-1.0, -2.0])
+
 end

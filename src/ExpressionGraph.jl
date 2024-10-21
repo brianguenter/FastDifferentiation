@@ -175,11 +175,17 @@ Special if_else to use for conditionals instead of builtin ifelse because the la
 
 during code generation.
 """
-function if_else(condition::Node, true_branch=Node(true_branch), false_branch=Node(false_branch))
+function if_else(condition::Node, true_branch=Node(true_branch), false_branch=Node(false_branch)) #This looks crazy. But: if_else(x<y,1.0,2.0) takes the argument 1.0 and converts it to a Node then assigns it back to the variable true_branch. So in the function body true_branch is a Node(1.0), not 1.0.
     @assert value(condition) in special_diadic || value(condition) in special_monadic
     check_cache((if_else, condition, true_branch, false_branch))
 end
 export if_else
+
+conditional_and(condition::Node, true_branch=Node(true_branch)) = if_else(condition, true_branch, false)
+export conditional_and
+
+conditional_or(condition::Node, false_branch=Node(false_branch)) = if_else(condition, true, false_branch)
+export conditional_or
 
 #generic cache checking for functions that don't have this special cased
 simplify_check_cache(f, a) = check_cache((f, a))::Node
