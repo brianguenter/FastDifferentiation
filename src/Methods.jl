@@ -76,7 +76,8 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     return Expr(:block, exprs...)
 end
 
-
+"""Override base isequal method because this has a ::Bool constraint on the return type and this returns a Node instead of a Bool"""
+Base.isequal(x::Node, y::Node) = x == y
 # """if the node value is 0 then can evaluate this at compile time. Otherwise have to return an expression which will be evaluated when executing function created by make_function"""
 # Base.iszero(a::Node) = node_value(a) == 0 ? true : simplify_check_cache()
 # const special_cases = (signbit, isreal, isfinite, iszero, isnan, isinf, isinteger) #iszero must be defined or linear algebra routines, for example in sparse matrix will give type promotion error
