@@ -52,27 +52,21 @@ function _dag_to_function!(node, local_body, variable_to_index, node_to_var)
                 gen_true_or_false_node(node, true_node, true_body, node_to_var, variable_to_index)
 
                 gen_true_or_false_node(node, false_node, false_body, node_to_var, variable_to_index)
-                # if is_leaf(false_node)
-                #     if is_constant(false_node)
-                #         temp_val = value(false_node)
-                #     else
-                #         temp_val = node_to_var[false_node]
-                #     end
-                #     push!(false_body.args, :($(gensym(:s)) = $(temp_val))) #seems roundabout to use an assignment when really just want the value of the node but couldn't figure out how to make this work with Expr
-                # else
-                #     visited = get(node_to_var, false_node, nothing)
-                #     if visited !== nothing
-                #         push!(false_body.args, :($(gensym(:s)) = $visited))
-                #     else
-                #         _dag_to_function!(false_node, false_body, variable_to_index, node_to_var)
-                #     end
-                # end
 
                 statement = :($(node_to_var[node]) = if $(if_cond_var)
                     $(true_body)
                 else
                     $(false_body)
                 end)
+            elseif value(node) === :(&&) || value(node) === :||
+                true_body = Expr(:block)
+                if_cond_var = _dag_to_function!(children(node)[1], local_body, variable_to_index, node_to_var)
+
+                true_node = children(node)[2]
+
+                gen_true_or_false_node(node, true_node, true_body, node_to_var, variable_to_index)
+
+                statement = :($(node_to_var[node]) = $(Symbol(value(node)))($(if_cond_var), $(true_body)))
             else
                 args = _dag_to_function!.(children(node), Ref(local_body), Ref(variable_to_index), Ref(node_to_var))
                 statement = :($(node_to_var[node]) = $(Symbol(value(node)))($(args...)))

@@ -32,10 +32,12 @@ const previously_declared_for = Set([])
 
 const basic_monadic = [-, +]
 const basic_diadic = [+, -, *, /, //, \, ^]
+#Notes: if a else b, a && b, a || b are special cases. These are not functions so, for example, you can't write &&(conodition, second term). These have to be handled specially when taking derivatives.
 const special_diadic = [max, min, copysign, &, |, !, ⊻, <, >, ≤, ≥, ≠, ==, isless]
 const special_monadic = [mod2pi, rem2pi, signbit, isreal, iszero, isfinite, isnan, isinf, isinteger, !]
 
 const all_supported_functions = vcat(monadic, diadic, basic_monadic, basic_diadic, special_diadic, special_monadic)
+
 
 # TODO: keep domains tighter than this
 function number_methods(T, rhs1, rhs2, options=nothing)
