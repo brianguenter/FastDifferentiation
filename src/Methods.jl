@@ -33,7 +33,7 @@ const previously_declared_for = Set([])
 const basic_monadic = [-, +]
 const basic_diadic = [+, -, *, /, //, \, ^]
 #Notes: if a else b, a && b, a || b are special cases. These are not functions so, for example, you can't write &&(conodition, second term). These have to be handled specially when taking derivatives.
-const special_diadic = [max, min, copysign, &, |, !, ⊻, <, >, ≤, ≥, ≠, ==, isless]
+const special_diadic = [max, min, copysign, &, |, !, ⊻, <, >, ≤, ≥, ≠, ==, isless, isequal]
 const special_monadic = [mod2pi, rem2pi, signbit, isreal, iszero, isfinite, isnan, isinf, isinteger, !]
 
 const all_supported_functions = vcat(monadic, diadic, basic_monadic, basic_diadic, special_diadic, special_monadic)
@@ -76,8 +76,7 @@ function number_methods(T, rhs1, rhs2, options=nothing)
     return Expr(:block, exprs...)
 end
 
-"""Override base isequal method because this has a ::Bool constraint on the return type and this returns a Node instead of a Bool"""
-Base.isequal(x::Node, y::Node) = x == y
+
 # """if the node value is 0 then can evaluate this at compile time. Otherwise have to return an expression which will be evaluated when executing function created by make_function"""
 # Base.iszero(a::Node) = node_value(a) == 0 ? true : simplify_check_cache()
 # const special_cases = (signbit, isreal, isfinite, iszero, isnan, isinf, isinteger) #iszero must be defined or linear algebra routines, for example in sparse matrix will give type promotion error
